@@ -30,6 +30,7 @@ def init_db():
     conn.commit()
     conn.close()
 
+
 @app.route('/api/expenses', methods=['GET'])
 def get_expenses():
     conn = get_db()
