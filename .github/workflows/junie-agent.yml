@@ -26,16 +26,30 @@ jobs:
           ref: ${{ github.event.workflow_run.head_branch }}
           fetch-depth: 0
 
-      # The GitHub runner executes this natively, so `gh` works here perfectly
-      - name: Create Draft PR
+      - name: Create Conditional PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr create --draft \
-            --title "Auto PR: ${{ github.event.workflow_run.head_commit.message }}" \
-            --body "Pending Junie analysis..." \
-            --head ${{ github.event.workflow_run.head_branch }} \
-            --base master || echo "PR already exists" 
+          # Check if the Python tests passed or failed
+          if [ "${{ github.event.workflow_run.conclusion }}" == "success" ]; then
+            echo "Tests passed! Creating a normal, ready-for-review PR."
+            gh pr create \
+              --title "Auto PR: ${{ github.event.workflow_run.head_commit.message }}" \
+              --body "Pending Junie analysis..." \
+              --head ${{ github.event.workflow_run.head_branch }} \
+              --base master || echo "PR already exists"
+              
+            # If the PR already existed as a Draft from a previous run, mark it as ready
+            gh pr ready ${{ github.event.workflow_run.head_branch }} || true
+            
+          else
+            echo "Tests failed! Creating a Draft PR."
+            gh pr create --draft \
+              --title "Auto PR: ${{ github.event.workflow_run.head_commit.message }}" \
+              --body "Pending Junie analysis..." \
+              --head ${{ github.event.workflow_run.head_branch }} \
+              --base master || echo "PR already exists"
+          fi
 
       - name: Run Junie Analysis
         uses: JetBrains/junie-github-action@v0
