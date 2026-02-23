@@ -51,6 +51,9 @@ jobs:
               --base master || echo "PR already exists"
           fi
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
       - name: Run Junie Analysis
         uses: JetBrains/junie-github-action@v0
         env:
