@@ -29,7 +29,6 @@ def init_db():
     ''')
     conn.commit()
     conn.close()
-    pass
 
 
 @app.route('/api/expenses', methods=['GET'])
