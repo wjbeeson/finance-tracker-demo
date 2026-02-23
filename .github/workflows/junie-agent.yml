@@ -1,130 +1,92 @@
-name: Junie PR Builder
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import sqlite3
+import csv
+import io
+import os
+from datetime import datetime
 
-on:
-  workflow_run:
-    workflows: ["Python Backend Tests"]
-    types:
-      - completed
+app = Flask(__name__)
+CORS(app)
 
-jobs:
-  junie-agent-review:
-    # Force stop if it hangs for more than 5 minutes
-    timeout-minutes: 10
+DATABASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'expenses.db')
 
-    # Only run if the commit message contains @junie-agent
-    if: contains(github.event.workflow_run.head_commit.message, '@junie-agent')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-      checks: read
+def get_db():
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    return conn
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_branch }}
-          fetch-depth: 0
+def init_db():
+    conn = get_db()
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS expenses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            description TEXT NOT NULL,
+            amount REAL NOT NULL,
+            date TEXT NOT NULL,
+            category TEXT NOT NULL
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
-      - name: Create Conditional PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Check if the Python tests passed or failed
-          if [ "${{ github.event.workflow_run.conclusion }}" == "success" ]; then
-            echo "Tests passed! Creating a normal, ready-for-review PR."
-            gh pr create \
-              --title "Auto PR: ${{ github.event.workflow_run.head_commit.message }}" \
-              --body "Pending Junie analysis..." \
-              --head ${{ github.event.workflow_run.head_branch }} \
-              --base master || echo "PR already exists"
-              
-            # If the PR already existed as a Draft from a previous run, mark it as ready
-            gh pr ready ${{ github.event.workflow_run.head_branch }} || true
-            
-          else
-            echo "Tests failed! Creating a Draft PR."
-            gh pr create --draft \
-              --title "Auto PR: ${{ github.event.workflow_run.head_commit.message }}" \
-              --body "Pending Junie analysis..." \
-              --head ${{ github.event.workflow_run.head_branch }} \
-              --base master || echo "PR already exists"
-          fi
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
+@app.route('/api/expenses', methods=['GET'])
+def get_expenses():
+    conn = get_db()
+    expenses = conn.execute('SELECT * FROM expenses ORDER BY date DESC').fetchall()
+    conn.close()
+    return jsonify([dict(row) for row in expenses])
 
-      - name: Run Junie Analysis
-        uses: JetBrains/junie-github-action@v0
-        env:
-          JIRA_URL: ${{ secrets.JIRA_URL }}
-          JIRA_USERNAME: ${{ secrets.JIRA_USERNAME }}
-          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-        with:
-          junie_api_key: ${{ secrets.JUNIE_API_KEY }}
-          allowed_mcp_servers: "mcp_github_checks_server,mcp_github_inline_comment_server,mcp-atlassian"
-          base_branch: ${{ github.event.workflow_run.head_branch }}
-          prompt: |
-            STRICT RULES — READ BEFORE DOING ANYTHING:
-            - Do NOT explore the repository file structure (no `ls`, `find`, `cat` on repo files).
-            - Do NOT open or read workflow YAML files, Dockerfiles, config files, or any source code files.
-            - Do NOT investigate the CI/CD environment, installed tools, or system setup.
-            - Do NOT verify or second-guess the test results provided below — they are authoritative.
-            - Execute ONLY the numbered steps below. Do not add, skip, or reorder steps.
-            - After completing the final step, IMMEDIATELY STOP. Do not perform any additional analysis.
+@app.route('/api/expenses/upload', methods=['POST'])
+def upload_csv():
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+    
+    if not file.filename.endswith('.csv'):
+        return jsonify({'error': 'File must be a CSV'}), 400
+    
+    try:
+        stream = io.StringIO(file.stream.read().decode('utf-8'))
+        reader = csv.DictReader(stream)
+        
+        conn = get_db()
+        count = 0
+        for row in reader:
+            # Handle different possible column names
+            description = row.get('description') or row.get('Description') or ''
+            amount = row.get('amount') or row.get('Amount') or 0
+            date = row.get('date') or row.get('Date') or ''
+            category = row.get('category') or row.get('Category') or ''
             
-            ENVIRONMENT CONTEXT:
-            You are executing in a GitHub Actions runner. You have access to:
-            - `curl` and `jq` for GitHub API calls. Use the `$GITHUB_TOKEN` environment variable for Authorization.
-            - Standard Git commands (`git diff`, `git log`).
-            - The `mcp_github_checks_server` tool (ONLY use if tests failed and you need error logs).
-            - The `mcp-atlassian` Jira MCP tool (`jira_get_issue`) for fetching Jira ticket details.
-            Do NOT attempt to use the `gh` CLI tool.
-            
-            PRE-RESOLVED CONTEXT (do not re-derive these values):
-            - Repository: '${{ github.repository }}'
-            - Branch: '${{ github.event.workflow_run.head_branch }}'
-            - Commit SHA: '${{ github.event.workflow_run.head_sha }}'
-            - Test result: '${{ github.event.workflow_run.conclusion }}'
-            - The branch name IS the Jira ticket ID (e.g., `FT-42`). Jira project space key: "FT".
-            
-            YOUR MISSION — execute this exact sequence:
-            
-            1. Find the open Pull Request for branch '${{ github.event.workflow_run.head_branch }}' using:
-               curl -s -H "Authorization: token $GITHUB_TOKEN" \
-                 "https://api.github.com/repos/${{ github.repository }}/pulls?head=${{ github.repository_owner }}:${{ github.event.workflow_run.head_branch }}&state=open"
-            
-            2. Run `git diff origin/master..HEAD` to get the code changes.
-            
-            3. Update the PR description using `curl -X PATCH` with a detailed summary of the code changes from step 2.
-            
-            4. Check the test result: The value is '${{ github.event.workflow_run.conclusion }}' (already provided above). Do NOT query any API to re-check this — use this value directly.
-            
-            5. If test result is 'failure':
-               a. Use the `mcp_github_checks_server` tool to read the failure logs.
-               b. Post a PR comment explaining where the tests failed and suggest a fix.
-               c. IMMEDIATELY STOP AND EXIT. Do nothing else.
-            
-            6. If test result is 'success', perform the Acceptance Criteria Review:
-               a. Use the `mcp-atlassian` tool (`jira_get_issue`) with ticket ID '${{ github.event.workflow_run.head_branch }}' to fetch the full ticket details including acceptance criteria.
-               b. Run `git log origin/master..HEAD --pretty=format:"%h %s"` to get the commit history.
-               c. Cross-reference the commit history and code diff (from step 2) against the acceptance criteria.
-               d. Compose and post a PR comment using `curl` with this structure:
-                  ---
-                  ## ✅ Tests Passed — Acceptance Criteria Review
-                  
-                  **Jira Ticket:** [<TICKET-ID>](<link to ticket>)
-                  
-                  ### Acceptance Criteria Assessment
-                  For each acceptance criterion from the ticket, list:
-                  - The criterion text
-                  - ✅ **Met** / ❌ **Not Met** / ⚠️ **Partially Met**
-                  - A brief explanation referencing specific commits or code changes
-                  
-                  ### Commit History
-                  List all commits on this branch.
-                  
-                  ### Summary
-                  An overall verdict: are all acceptance criteria fully met?
-                  ---
-               e. IMMEDIATELY STOP AND EXIT. Do nothing else.
+            conn.execute(
+                'INSERT INTO expenses (description, amount, date, category) VALUES (?, ?, ?, ?)',
+                (description, float(amount), date, category)
+            )
+            count += 1
+        
+        conn.commit()
+        conn.close()
+        return jsonify({'message': f'Successfully imported {count} expenses'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/expenses/summary', methods=['GET'])
+def get_summary():
+    conn = get_db()
+    summary = conn.execute('''
+        SELECT category, SUM(amount) as total
+        FROM expenses
+        GROUP BY category
+        ORDER BY total DESC
+    ''').fetchall()
+    conn.close()
+    return jsonify([{'category': row['category'], 'total': row['total']} for row in summary])
+
+if __name__ == '__main__':
+    init_db()
+    app.run(host='0.0.0.0', port=8080, debug=True)
