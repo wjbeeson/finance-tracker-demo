@@ -10,12 +10,7 @@
     },
     "mcp-atlassian": {
       "command": "uvx",
-      "args": [
-        "mcp-atlassian",
-        "--jira-url", "${JIRA_URL}",
-        "--jira-username", "${JIRA_USERNAME}",
-        "--jira-token", "${JIRA_API_TOKEN}"
-      ]
+      "args": ["mcp-atlassian"]
     },
     "web-search": {
         "command": "uvx",
