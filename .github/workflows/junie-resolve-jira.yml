@@ -1,0 +1,62 @@
+name: Junie Jira Wrap-up
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  junie-agent-resolve:
+    # Crucial: Only run if the PR was actually merged, not just closed/abandoned!
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Run Junie Resolution Summary
+        uses: JetBrains/junie-github-action@v0
+        env:
+          JIRA_URL: ${{ secrets.JIRA_URL }}
+          JIRA_USERNAME: ${{ secrets.JIRA_USERNAME }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        with:
+          junie_api_key: ${{ secrets.JUNIE_API_KEY }}
+          # We only need GitHub tools to read the PR, and Atlassian tools to update the ticket
+          allowed_mcp_servers: "mcp_github_pull_request_server,mcp-atlassian"
+          prompt: |
+            STRICT RULES — READ BEFORE DOING ANYTHING:
+            - Do NOT explore the repository file structure.
+            - Do NOT open or read source code files directly.
+            - ONLY use the provided MCP tools to interact with GitHub and Jira.
+            - Execute ONLY the numbered steps below.
+            - After completing the final step, IMMEDIATELY STOP.
+            
+            ENVIRONMENT CONTEXT:
+            - PR Number: '${{ github.event.pull_request.number }}'
+            - Branch Name / Jira Ticket ID: '${{ github.event.pull_request.head.ref }}'
+            
+            YOUR MISSION — execute this exact sequence:
+            
+            1. Use the GitHub MCP server to fetch the final description and diff of PR #${{ github.event.pull_request.number }}.
+            
+            2. Based on the diff and PR description, generate a concise, business-friendly "Release Summary" explaining what was actually built and merged.
+            
+            3. Use the `mcp-atlassian` tool to post a comment to the Jira ticket associated with the branch '${{ github.event.pull_request.head.ref }}'. The comment should look like this:
+               ---
+               🚀 **PR Merged & Resolved by Junie**
+               
+               **Release Summary:**
+               [Insert your generated summary here]
+               ---
+               
+            4. Use the `mcp-atlassian` tool to transition the same Jira ticket to the "Done" status (or the equivalent resolved state in the project's workflow).
+            
+            5. IMMEDIATELY STOP AND EXIT. Do nothing else.
