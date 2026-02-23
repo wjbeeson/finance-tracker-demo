@@ -155,6 +155,36 @@ class TestUploadCSV:
         expenses = client.get("/api/expenses").get_json()
         assert len(expenses) == 3
 
+    def test_duplicate_csv_upload(self, client):
+        """Uploading the same CSV twice doubles the data and summary totals."""
+        csv_content = (
+            "description,amount,date,category\n"
+            "Coffee,4.50,2026-01-10,Food\n"
+            "Bus ticket,2.00,2026-01-11,Transport\n"
+        )
+
+        # First upload
+        data = {"file": (io.BytesIO(csv_content.encode("utf-8")), "dup.csv")}
+        resp = client.post("/api/expenses/upload", data=data, content_type="multipart/form-data")
+        assert resp.status_code == 200
+        assert "2 expenses" in resp.get_json()["message"]
+
+        # Second identical upload
+        data = {"file": (io.BytesIO(csv_content.encode("utf-8")), "dup.csv")}
+        resp = client.post("/api/expenses/upload", data=data, content_type="multipart/form-data")
+        assert resp.status_code == 200
+        assert "2 expenses" in resp.get_json()["message"]
+
+        # All 4 rows should be present
+        expenses = client.get("/api/expenses").get_json()
+        assert len(expenses) == 4
+
+        # Summary totals should reflect both uploads
+        summary = client.get("/api/expenses/summary").get_json()
+        totals = {row["category"]: row["total"] for row in summary}
+        assert totals["Food"] == pytest.approx(9.00)       # 4.50 * 2
+        assert totals["Transport"] == pytest.approx(4.00)   # 2.00 * 2
+
     def test_malformed_csv_returns_500(self, client):
         """A CSV with non-numeric amount triggers a 500 error."""
         csv_content = "description,amount,date,category\nBad,not_a_number,2026-01-01,Misc\n"
