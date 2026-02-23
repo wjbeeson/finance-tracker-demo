@@ -209,6 +209,33 @@ class TestUploadCSV:
         assert resp.status_code == 200
         assert "1 expenses" in resp.get_json()["message"]
 
+    def test_special_characters_in_fields(self, client):
+        """CSV with quoted fields containing commas and special characters imports correctly."""
+        csv_content = (
+            'description,amount,date,category\n'
+            '"Lunch, dinner & drinks",55.00,2026-04-10,"Food & Drink"\n'
+            '"Hotel ""Grand Palace""",200.00,2026-04-11,Travel\n'
+        )
+        data = {"file": (io.BytesIO(csv_content.encode("utf-8")), "special.csv")}
+        resp = client.post("/api/expenses/upload", data=data, content_type="multipart/form-data")
+        assert resp.status_code == 200
+        assert "2 expenses" in resp.get_json()["message"]
+
+        expenses = client.get("/api/expenses").get_json()
+        assert len(expenses) == 2
+
+        descs = {e["description"] for e in expenses}
+        assert "Lunch, dinner & drinks" in descs
+        assert 'Hotel "Grand Palace"' in descs
+
+        cats = {e["category"] for e in expenses}
+        assert "Food & Drink" in cats
+        assert "Travel" in cats
+
+        amounts = {e["description"]: e["amount"] for e in expenses}
+        assert amounts["Lunch, dinner & drinks"] == pytest.approx(55.00)
+        assert amounts['Hotel "Grand Palace"'] == pytest.approx(200.00)
+
 
 # ─── GET /api/expenses/summary ────────────────────────────────────────────────
 
