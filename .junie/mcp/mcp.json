@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "git": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-git",
+        "--repository",
+        "C:/Users/Will_JetBrains/PycharmProjects/finance-tracker-demo"
+      ]
+    },
+    "mcp-atlassian": {
+      "command": "uvx",
+      "args": ["mcp-atlassian"]
+    },
+    "web-search": {
+        "command": "uvx",
+        "args": ["duckduckgo-mcp-server"]
+    }
+  }
+}

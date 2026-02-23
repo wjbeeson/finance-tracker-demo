@@ -1,5 +1,6 @@
 import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { useTheme } from '../context/ThemeContext';
 
 export const COLORS = [
   '#6366f1', // indigo-500
@@ -26,10 +27,10 @@ const CustomTooltip = ({ active, payload, total }) => {
     const item = payload[0];
     const percentage = ((item.value / total) * 100).toFixed(1);
     return (
-      <div className="bg-white px-4 py-3 shadow-lg rounded-lg border border-slate-200">
-        <p className="font-medium text-slate-800">{item.name}</p>
-        <p className="text-slate-600">{formatCurrency(item.value)}</p>
-        <p className="text-sm text-slate-500">{percentage}% of total</p>
+      <div className="bg-white dark:bg-slate-800 px-4 py-3 shadow-lg rounded-lg border border-slate-200 dark:border-slate-700">
+        <p className="font-medium text-slate-800 dark:text-slate-100">{item.name}</p>
+        <p className="text-slate-600 dark:text-slate-300">{formatCurrency(item.value)}</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">{percentage}% of total</p>
       </div>
     );
   }
@@ -46,7 +47,7 @@ const renderLegend = (props) => {
             className="w-3 h-3 rounded-full" 
             style={{ backgroundColor: entry.color }}
           />
-          <span className="text-sm text-slate-600">{entry.value}</span>
+          <span className="text-sm text-slate-600 dark:text-slate-300">{entry.value}</span>
         </li>
       ))}
     </ul>
@@ -54,12 +55,14 @@ const renderLegend = (props) => {
 };
 
 const DonutChart = ({ data, isLoading }) => {
+  const { theme } = useTheme();
   const total = data?.reduce((sum, item) => sum + parseFloat(item.total), 0) || 0;
+  const cellStroke = theme === 'dark' ? '#1e293b' : 'white';
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <h2 className="text-lg font-semibold text-slate-800 mb-4">Spending by Category</h2>
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+        <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Spending by Category</h2>
         <div className="h-80 flex items-center justify-center">
           <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
         </div>
@@ -69,10 +72,10 @@ const DonutChart = ({ data, isLoading }) => {
 
   if (!data || data.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <h2 className="text-lg font-semibold text-slate-800 mb-4">Spending by Category</h2>
-        <div className="h-80 flex flex-col items-center justify-center text-slate-500">
-          <svg className="w-16 h-16 mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+        <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Spending by Category</h2>
+        <div className="h-80 flex flex-col items-center justify-center text-slate-500 dark:text-slate-400">
+          <svg className="w-16 h-16 mb-4 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
           </svg>
@@ -89,12 +92,12 @@ const DonutChart = ({ data, isLoading }) => {
   }));
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-slate-800">Spending by Category</h2>
+        <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Spending by Category</h2>
         <div className="text-right">
-          <p className="text-sm text-slate-500">Total Spending</p>
-          <p className="text-xl font-bold text-slate-800">{formatCurrency(total)}</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Total Spending</p>
+          <p className="text-xl font-bold text-slate-800 dark:text-slate-100">{formatCurrency(total)}</p>
         </div>
       </div>
       
@@ -114,7 +117,7 @@ const DonutChart = ({ data, isLoading }) => {
                 <Cell 
                   key={`cell-${index}`} 
                   fill={COLORS[index % COLORS.length]}
-                  stroke="white"
+                  stroke={cellStroke}
                   strokeWidth={2}
                 />
               ))}
