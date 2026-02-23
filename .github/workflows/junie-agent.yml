@@ -63,7 +63,7 @@ jobs:
             You have immediate access to the following tools:
             - `curl` and `jq` for GitHub API calls. Use the `$GITHUB_TOKEN` environment variable for Authorization. 
             - Standard Git commands (`git diff`, `git log`).
-            - The `mcp_github_checks_server` to read test logs.
+            - The `mcp_github_checks_server` tool.
             Do NOT attempt to use the `gh` CLI tool, it is not available to you.
             
             YOUR MISSION:
@@ -72,6 +72,6 @@ jobs:
             1. Find the open Pull Request for the head branch '${{ github.event.workflow_run.head_branch }}' using `curl` against the GitHub REST API.
             2. Perform a `git diff` between your current branch and 'origin/master'.
             3. Update the description of that Pull Request using `curl -X PATCH` with a detailed summary of the code changes.
-            4. Use your checks server to analyze the outcome of the 'Python Backend Tests' workflow.
-            5. If tests passed: add a comment to the PR using `curl` saying exactly "tests passed, ready for review".
-            6. If tests failed: add a comment explaining exactly where the tests failed based on the logs, and suggest a fix. Do not mark the PR as ready for review.
+            4. Analyze the test results: Use `curl` to check the status of the 'Python Backend Tests' workflow run. (You only need to use the `mcp_github_checks_server` tool IF the tests failed and you need to read the specific error logs).
+            5. If tests passed: add a comment to the PR using `curl` saying exactly "tests passed, ready for review". THEN IMMEDIATELY STOP AND EXIT.
+            6. If tests failed: use the checks server tool to read the logs, add a comment explaining exactly where the tests failed and suggest a fix. THEN IMMEDIATELY STOP AND EXIT.
