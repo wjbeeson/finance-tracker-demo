@@ -8,7 +8,7 @@ on:
 
 jobs:
   junie-agent-review:
-    # THE KILL SWITCH: Force stop if it hangs for more than 5 minutes
+    # Force stop if it hangs for more than 5 minutes
     timeout-minutes: 5
 
     # Only run if the commit message contains @junie-agent
@@ -26,6 +26,7 @@ jobs:
           ref: ${{ github.event.workflow_run.head_branch }}
           fetch-depth: 0
 
+      # The GitHub runner executes this natively, so `gh` works here perfectly
       - name: Create Draft PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -41,10 +42,22 @@ jobs:
         with:
           junie_api_key: ${{ secrets.JUNIE_API_KEY }}
           allowed_mcp_servers: "mcp_github_checks_server,mcp_github_inline_comment_server"
+          base_branch: ${{ github.event.workflow_run.head_branch }}
           prompt: |
-            You are managing the Pull Request for this branch. Please execute the following sequence:
-            1. Perform a git diff between this branch and master.
-            2. Update the Pull Request description with a detailed summary of the code changes.
-            3. Use your checks server to analyze the outcome of the 'Python Backend Tests' workflow that just completed.
-            4. If the tests passed: add a comment to the PR saying exactly "tests passed, ready for review".
-            5. If the tests failed: add a comment explaining exactly where the tests failed, why they failed based on the logs, and suggest a fix. Do not mark the PR as ready for review.
+            ENVIRONMENT CONTEXT: 
+            You are executing in a GitHub Actions runner. Do not spend time exploring the environment or searching for tools. 
+            You have immediate access to the following tools:
+            - `curl` and `jq` for GitHub API calls. Use the `$GITHUB_TOKEN` environment variable for Authorization. 
+            - Standard Git commands (`git diff`, `git log`).
+            - The `mcp_github_checks_server` to read test logs.
+            Do NOT attempt to use the `gh` CLI tool, it is not available to you.
+            
+            YOUR MISSION:
+            You are managing the automated CI/CD pipeline for the branch '${{ github.event.workflow_run.head_branch }}'.
+            A Pull Request has just been created for this branch. Please execute this exact sequence without deviation:
+            1. Find the open Pull Request for the head branch '${{ github.event.workflow_run.head_branch }}' using `curl` against the GitHub REST API.
+            2. Perform a `git diff` between your current branch and 'origin/master'.
+            3. Update the description of that Pull Request using `curl -X PATCH` with a detailed summary of the code changes.
+            4. Use your checks server to analyze the outcome of the 'Python Backend Tests' workflow.
+            5. If tests passed: add a comment to the PR using `curl` saying exactly "tests passed, ready for review".
+            6. If tests failed: add a comment explaining exactly where the tests failed based on the logs, and suggest a fix. Do not mark the PR as ready for review.
