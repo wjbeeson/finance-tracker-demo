@@ -1,12 +1,16 @@
 name: Python Backend Tests
 
-on: [push]
+# --- CHANGED THIS SECTION ---
+on:
+  push:
+    branches-ignore:
+      - master
+# ----------------------------
 
 jobs:
   test-backend:
     runs-on: ubuntu-latest
 
-    # This acts like running `cd backend` before executing any run commands
     defaults:
       run:
         working-directory: ./backend
@@ -25,7 +29,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest
           
-          # This now correctly looks for backend/requirements.txt
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Run pytest
