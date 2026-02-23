@@ -9,7 +9,7 @@ on:
 jobs:
   junie-agent-review:
     # Force stop if it hangs for more than 5 minutes
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     # Only run if the commit message contains @junie-agent
     if: contains(github.event.workflow_run.head_commit.message, '@junie-agent')
@@ -62,33 +62,51 @@ jobs:
           allowed_mcp_servers: "mcp_github_checks_server,mcp_github_inline_comment_server,mcp-atlassian"
           base_branch: ${{ github.event.workflow_run.head_branch }}
           prompt: |
-            ENVIRONMENT CONTEXT: 
-            You are executing in a GitHub Actions runner. Do not spend time exploring the environment or searching for tools. 
-            You have immediate access to the following tools:
-            - `curl` and `jq` for GitHub API calls. Use the `$GITHUB_TOKEN` environment variable for Authorization. 
+            STRICT RULES — READ BEFORE DOING ANYTHING:
+            - Do NOT explore the repository file structure (no `ls`, `find`, `cat` on repo files).
+            - Do NOT open or read workflow YAML files, Dockerfiles, config files, or any source code files.
+            - Do NOT investigate the CI/CD environment, installed tools, or system setup.
+            - Do NOT verify or second-guess the test results provided below — they are authoritative.
+            - Execute ONLY the numbered steps below. Do not add, skip, or reorder steps.
+            - After completing the final step, IMMEDIATELY STOP. Do not perform any additional analysis.
+            
+            ENVIRONMENT CONTEXT:
+            You are executing in a GitHub Actions runner. You have access to:
+            - `curl` and `jq` for GitHub API calls. Use the `$GITHUB_TOKEN` environment variable for Authorization.
             - Standard Git commands (`git diff`, `git log`).
-            - The `mcp_github_checks_server` tool.
-            - The `mcp-atlassian` Jira MCP tool (for fetching Jira ticket details).
-            Do NOT attempt to use the `gh` CLI tool, it is not available to you.
+            - The `mcp_github_checks_server` tool (ONLY use if tests failed and you need error logs).
+            - The `mcp-atlassian` Jira MCP tool (`jira_get_issue`) for fetching Jira ticket details.
+            Do NOT attempt to use the `gh` CLI tool.
             
-            IMPORTANT CONTEXT:
-            - The branch name IS the Jira ticket ID (e.g., `FT-42`). The Jira project space is "Finance Tracker" with key "FT".
-            - The branch for this run is: '${{ github.event.workflow_run.head_branch }}'.
+            PRE-RESOLVED CONTEXT (do not re-derive these values):
+            - Repository: '${{ github.repository }}'
+            - Branch: '${{ github.event.workflow_run.head_branch }}'
+            - Commit SHA: '${{ github.event.workflow_run.head_sha }}'
+            - Test result: '${{ github.event.workflow_run.conclusion }}'
+            - The branch name IS the Jira ticket ID (e.g., `FT-42`). Jira project space key: "FT".
             
-            YOUR MISSION:
-            You are managing the automated CI/CD pipeline for the branch '${{ github.event.workflow_run.head_branch }}'.
-            A Pull Request has just been created for this branch. Please execute this exact sequence without deviation:
-            1. Find the open Pull Request for the head branch '${{ github.event.workflow_run.head_branch }}' using `curl` against the GitHub REST API.
-            2. Perform a `git diff` between your current branch and 'origin/master'.
-            3. Update the description of that Pull Request using `curl -X PATCH` with a detailed summary of the code changes.
-            4. Analyze the test results: Use `curl` to check the status of the 'Python Backend Tests' workflow run. (You only need to use the `mcp_github_checks_server` tool IF the tests failed and you need to read the specific error logs).
-            5. If tests FAILED: use the checks server tool to read the logs, add a comment explaining exactly where the tests failed and suggest a fix. THEN IMMEDIATELY STOP AND EXIT.
-            6. If tests PASSED, perform the Acceptance Criteria Review:
-               a. The branch name '${{ github.event.workflow_run.head_branch }}' is the Jira ticket ID. Use the `mcp-atlassian` tool (`jira_get_issue`) to fetch the full ticket details, including the description and acceptance criteria.
-               b. Run `git log origin/master..HEAD --pretty=format:"%h %s"` to get the full commit history for this branch.
-               c. Also reference the `git diff` from step 2 to understand the actual code changes.
-               d. Cross-reference the commit history and code changes against the acceptance criteria from the Jira ticket.
-               e. Compose a detailed PR comment with the following structure:
+            YOUR MISSION — execute this exact sequence:
+            
+            1. Find the open Pull Request for branch '${{ github.event.workflow_run.head_branch }}' using:
+               curl -s -H "Authorization: token $GITHUB_TOKEN" \
+                 "https://api.github.com/repos/${{ github.repository }}/pulls?head=${{ github.repository_owner }}:${{ github.event.workflow_run.head_branch }}&state=open"
+            
+            2. Run `git diff origin/master..HEAD` to get the code changes.
+            
+            3. Update the PR description using `curl -X PATCH` with a detailed summary of the code changes from step 2.
+            
+            4. Check the test result: The value is '${{ github.event.workflow_run.conclusion }}' (already provided above). Do NOT query any API to re-check this — use this value directly.
+            
+            5. If test result is 'failure':
+               a. Use the `mcp_github_checks_server` tool to read the failure logs.
+               b. Post a PR comment explaining where the tests failed and suggest a fix.
+               c. IMMEDIATELY STOP AND EXIT. Do nothing else.
+            
+            6. If test result is 'success', perform the Acceptance Criteria Review:
+               a. Use the `mcp-atlassian` tool (`jira_get_issue`) with ticket ID '${{ github.event.workflow_run.head_branch }}' to fetch the full ticket details including acceptance criteria.
+               b. Run `git log origin/master..HEAD --pretty=format:"%h %s"` to get the commit history.
+               c. Cross-reference the commit history and code diff (from step 2) against the acceptance criteria.
+               d. Compose and post a PR comment using `curl` with this structure:
                   ---
                   ## ✅ Tests Passed — Acceptance Criteria Review
                   
@@ -106,4 +124,4 @@ jobs:
                   ### Summary
                   An overall verdict: are all acceptance criteria fully met?
                   ---
-               f. Post this comment to the PR using `curl`. THEN IMMEDIATELY STOP AND EXIT.
+               e. IMMEDIATELY STOP AND EXIT. Do nothing else.
