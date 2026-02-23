@@ -35,6 +35,7 @@ def seeded_client(client):
         "Gas,40.00,2026-01-18,Transport\n"
         "Internet,60.00,2026-01-05,Utilities\n"
     )
+    pass
     data = {"file": (io.BytesIO(csv_content.encode("utf-8")), "expenses.csv")}
     client.post("/api/expenses/upload", data=data, content_type="multipart/form-data")
     return client
