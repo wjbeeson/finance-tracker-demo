@@ -236,6 +236,54 @@ class TestUploadCSV:
         assert amounts["Lunch, dinner & drinks"] == pytest.approx(55.00)
         assert amounts['Hotel "Grand Palace"'] == pytest.approx(200.00)
 
+    def test_large_csv_upload(self, client):
+        """Uploading a CSV with 500 rows imports all of them correctly."""
+        header = "description,amount,date,category\n"
+        rows = "".join(
+            f"Item {i},{i * 1.5:.2f},2026-01-{(i % 28) + 1:02d},Cat{i % 5}\n"
+            for i in range(500)
+        )
+        csv_content = header + rows
+        data = {"file": (io.BytesIO(csv_content.encode("utf-8")), "large.csv")}
+        resp = client.post("/api/expenses/upload", data=data, content_type="multipart/form-data")
+        assert resp.status_code == 200
+        assert "500 expenses" in resp.get_json()["message"]
+
+        expenses = client.get("/api/expenses").get_json()
+        assert len(expenses) == 500
+
+        # Summary should have exactly 5 categories (Cat0–Cat4)
+        summary = client.get("/api/expenses/summary").get_json()
+        assert len(summary) == 5
+        assert {row["category"] for row in summary} == {"Cat0", "Cat1", "Cat2", "Cat3", "Cat4"}
+
+    def test_csv_with_extra_columns_ignored(self, client):
+        """CSV with extra columns beyond the expected ones still imports correctly."""
+        csv_content = (
+            "description,amount,date,category,notes,priority\n"
+            "Dinner,42.00,2026-05-01,Food,business meal,high\n"
+            "Taxi,15.00,2026-05-02,Transport,airport run,low\n"
+        )
+        data = {"file": (io.BytesIO(csv_content.encode("utf-8")), "extra_cols.csv")}
+        resp = client.post("/api/expenses/upload", data=data, content_type="multipart/form-data")
+        assert resp.status_code == 200
+        assert "2 expenses" in resp.get_json()["message"]
+
+        expenses = client.get("/api/expenses").get_json()
+        assert len(expenses) == 2
+
+        # Verify the core fields are correct
+        descs = {e["description"] for e in expenses}
+        assert descs == {"Dinner", "Taxi"}
+        amounts = {e["description"]: e["amount"] for e in expenses}
+        assert amounts["Dinner"] == pytest.approx(42.00)
+        assert amounts["Taxi"] == pytest.approx(15.00)
+
+        # Extra columns should NOT appear in the response
+        for e in expenses:
+            assert "notes" not in e
+            assert "priority" not in e
+
 
 # ─── GET /api/expenses/summary ────────────────────────────────────────────────
 
