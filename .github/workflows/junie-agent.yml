@@ -53,9 +53,13 @@ jobs:
 
       - name: Run Junie Analysis
         uses: JetBrains/junie-github-action@v0
+        env:
+          JIRA_URL: ${{ secrets.JIRA_URL }}
+          JIRA_USERNAME: ${{ secrets.JIRA_USERNAME }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
         with:
           junie_api_key: ${{ secrets.JUNIE_API_KEY }}
-          allowed_mcp_servers: "mcp_github_checks_server,mcp_github_inline_comment_server"
+          allowed_mcp_servers: "mcp_github_checks_server,mcp_github_inline_comment_server,mcp-atlassian"
           base_branch: ${{ github.event.workflow_run.head_branch }}
           prompt: |
             ENVIRONMENT CONTEXT: 
@@ -64,7 +68,12 @@ jobs:
             - `curl` and `jq` for GitHub API calls. Use the `$GITHUB_TOKEN` environment variable for Authorization. 
             - Standard Git commands (`git diff`, `git log`).
             - The `mcp_github_checks_server` tool.
+            - The `mcp-atlassian` Jira MCP tool (for fetching Jira ticket details).
             Do NOT attempt to use the `gh` CLI tool, it is not available to you.
+            
+            IMPORTANT CONTEXT:
+            - The branch name IS the Jira ticket ID (e.g., `FT-42`). The Jira project space is "Finance Tracker" with key "FT".
+            - The branch for this run is: '${{ github.event.workflow_run.head_branch }}'.
             
             YOUR MISSION:
             You are managing the automated CI/CD pipeline for the branch '${{ github.event.workflow_run.head_branch }}'.
@@ -73,5 +82,28 @@ jobs:
             2. Perform a `git diff` between your current branch and 'origin/master'.
             3. Update the description of that Pull Request using `curl -X PATCH` with a detailed summary of the code changes.
             4. Analyze the test results: Use `curl` to check the status of the 'Python Backend Tests' workflow run. (You only need to use the `mcp_github_checks_server` tool IF the tests failed and you need to read the specific error logs).
-            5. If tests passed: add a comment to the PR using `curl` saying exactly "tests passed, ready for review". THEN IMMEDIATELY STOP AND EXIT.
-            6. If tests failed: use the checks server tool to read the logs, add a comment explaining exactly where the tests failed and suggest a fix. THEN IMMEDIATELY STOP AND EXIT.
+            5. If tests FAILED: use the checks server tool to read the logs, add a comment explaining exactly where the tests failed and suggest a fix. THEN IMMEDIATELY STOP AND EXIT.
+            6. If tests PASSED, perform the Acceptance Criteria Review:
+               a. The branch name '${{ github.event.workflow_run.head_branch }}' is the Jira ticket ID. Use the `mcp-atlassian` tool (`jira_get_issue`) to fetch the full ticket details, including the description and acceptance criteria.
+               b. Run `git log origin/master..HEAD --pretty=format:"%h %s"` to get the full commit history for this branch.
+               c. Also reference the `git diff` from step 2 to understand the actual code changes.
+               d. Cross-reference the commit history and code changes against the acceptance criteria from the Jira ticket.
+               e. Compose a detailed PR comment with the following structure:
+                  ---
+                  ## ✅ Tests Passed — Acceptance Criteria Review
+                  
+                  **Jira Ticket:** [<TICKET-ID>](<link to ticket>)
+                  
+                  ### Acceptance Criteria Assessment
+                  For each acceptance criterion from the ticket, list:
+                  - The criterion text
+                  - ✅ **Met** / ❌ **Not Met** / ⚠️ **Partially Met**
+                  - A brief explanation referencing specific commits or code changes
+                  
+                  ### Commit History
+                  List all commits on this branch.
+                  
+                  ### Summary
+                  An overall verdict: are all acceptance criteria fully met?
+                  ---
+               f. Post this comment to the PR using `curl`. THEN IMMEDIATELY STOP AND EXIT.

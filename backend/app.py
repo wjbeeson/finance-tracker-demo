@@ -33,6 +33,7 @@ def init_db():
 
 @app.route('/api/expenses', methods=['GET'])
 def get_expenses():
+    pass
     conn = get_db()
     expenses = conn.execute('SELECT * FROM expenses ORDER BY date DESC').fetchall()
     conn.close()
