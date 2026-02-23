@@ -34,7 +34,6 @@ def init_db():
 @app.route('/api/expenses', methods=['GET'])
 def get_expenses():
     conn = get_db()
-    pass
     expenses = conn.execute('SELECT * FROM expenses ORDER BY date DESC').fetchall()
     conn.close()
     return jsonify([dict(row) for row in expenses])
