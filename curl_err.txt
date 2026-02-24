@@ -1,0 +1,89 @@
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0* Host pixelfad.atlassian.net:443 was resolved.
+* IPv6: (none)
+* IPv4: 13.227.180.4
+*   Trying 13.227.180.4:443...
+* Connected to pixelfad.atlassian.net (13.227.180.4) port 443
+* ALPN: curl offers h2,http/1.1
+} [5 bytes data]
+* TLSv1.3 (OUT), TLS handshake, Client hello (1):
+} [512 bytes data]
+*  CAfile: /etc/ssl/certs/ca-certificates.crt
+*  CApath: /etc/ssl/certs
+{ [5 bytes data]
+* TLSv1.3 (IN), TLS handshake, Server hello (2):
+{ [122 bytes data]
+* TLSv1.3 (IN), TLS handshake, Encrypted Extensions (8):
+{ [19 bytes data]
+* TLSv1.3 (IN), TLS handshake, Certificate (11):
+{ [3862 bytes data]
+* TLSv1.3 (IN), TLS handshake, CERT verify (15):
+{ [264 bytes data]
+* TLSv1.3 (IN), TLS handshake, Finished (20):
+{ [36 bytes data]
+* TLSv1.3 (OUT), TLS change cipher, Change cipher spec (1):
+} [1 bytes data]
+* TLSv1.3 (OUT), TLS handshake, Finished (20):
+} [36 bytes data]
+* SSL connection using TLSv1.3 / TLS_AES_128_GCM_SHA256 / X25519 / RSASSA-PSS
+* ALPN: server accepted h2
+* Server certificate:
+*  subject: CN=*.atlassian.net
+*  start date: Sep  9 00:00:00 2025 GMT
+*  expire date: Oct  8 23:59:59 2026 GMT
+*  subjectAltName: host "pixelfad.atlassian.net" matched cert's "*.atlassian.net"
+*  issuer: C=US; O=Amazon; CN=Amazon RSA 2048 M04
+*  SSL certificate verify ok.
+*   Certificate level 0: Public key type RSA (2048/112 Bits/secBits), signed using sha256WithRSAEncryption
+*   Certificate level 1: Public key type RSA (2048/112 Bits/secBits), signed using sha256WithRSAEncryption
+*   Certificate level 2: Public key type RSA (2048/112 Bits/secBits), signed using sha256WithRSAEncryption
+} [5 bytes data]
+* using HTTP/2
+* Server auth using Basic with user 'will@pixelfad.com'
+* [HTTP/2] [1] OPENED stream for https://pixelfad.atlassian.net/rest/api/3/issue/FT-2
+* [HTTP/2] [1] [:method: GET]
+* [HTTP/2] [1] [:scheme: https]
+* [HTTP/2] [1] [:authority: pixelfad.atlassian.net]
+* [HTTP/2] [1] [:path: /rest/api/3/issue/FT-2]
+* [HTTP/2] [1] [authorization: Basic d2lsbEBwaXhlbGZhZC5jb206QVRBVFQzeEZmR0YwU1o1UlNGTWotQ002SXdzR3NkRkI0TW9yVHdEYjhBMVpDbGV1MFdYVHZ2WUs4UV9XUnF4NkRHQ0l1YUNhd2FQaEZ3SU5PNjFpcmUxQ0hiNkRPM1lzcFJKNk5zbGFKTUxGVnRBX0EtSGU4UGVGay11TVU2M3gxNHlBeGlpbU1LaHJUd1VSME9RMlAzSVFYd1RYY2RtN1RFcDF3Mk4yMzE2TWZ5MnhVNHlhaXNzPTVBNEY3MTE2]
+* [HTTP/2] [1] [user-agent: curl/8.5.0]
+* [HTTP/2] [1] [accept: application/json]
+} [5 bytes data]
+> GET /rest/api/3/issue/FT-2 HTTP/2
+> Host: pixelfad.atlassian.net
+> Authorization: Basic d2lsbEBwaXhlbGZhZC5jb206QVRBVFQzeEZmR0YwU1o1UlNGTWotQ002SXdzR3NkRkI0TW9yVHdEYjhBMVpDbGV1MFdYVHZ2WUs4UV9XUnF4NkRHQ0l1YUNhd2FQaEZ3SU5PNjFpcmUxQ0hiNkRPM1lzcFJKNk5zbGFKTUxGVnRBX0EtSGU4UGVGay11TVU2M3gxNHlBeGlpbU1LaHJUd1VSME9RMlAzSVFYd1RYY2RtN1RFcDF3Mk4yMzE2TWZ5MnhVNHlhaXNzPTVBNEY3MTE2
+> User-Agent: curl/8.5.0
+> Accept: application/json
+> 
+{ [5 bytes data]
+* TLSv1.3 (IN), TLS handshake, Newsession Ticket (4):
+{ [157 bytes data]
+< HTTP/2 200 
+< content-type: application/json;charset=UTF-8
+< date: Tue, 24 Feb 2026 01:29:13 GMT
+< server: AtlassianEdge
+< timing-allow-origin: *
+< x-arequestid: d246e60459c2b6fa0b059aec7e08f485
+< set-cookie: atlassian.xsrf.token=b6b8d07fc10765a30f88b8ceb6e2619e2fefb7fc_lin; Path=/; SameSite=None; Secure
+< x-aaccountid: 712020%3Adc37300c-e65b-461e-9d08-ce19e16a1d38
+< cache-control: no-cache, no-store, no-transform
+< x-ratelimit-limit: 400
+< x-ratelimit-remaining: 399
+< vary: Accept-Encoding
+< x-content-type-options: nosniff
+< x-xss-protection: 1; mode=block
+< atl-traceid: 292b9578278340e19f58180935d7f307
+< atl-request-id: 292b9578-2783-40e1-9f58-180935d7f307
+< strict-transport-security: max-age=63072000; includeSubDomains; preload
+< report-to: {"endpoints": [{"url": "https://dz8aopenkvv6s.cloudfront.net"}], "group": "endpoint-1", "include_subdomains": true, "max_age": 600}
+< nel: {"failure_fraction": 0.01, "include_subdomains": true, "max_age": 600, "report_to": "endpoint-1"}
+< x-cache: Miss from cloudfront
+< via: 1.1 c7ec25fc307cd07f5a96d4a3da560bc4.cloudfront.net (CloudFront)
+< x-amz-cf-pop: ORD58-P9
+< x-amz-cf-id: oAGoMKWcZHNr-Z6V4VKPiRMaAZ7gq8IDv7xsZN7K0uMbNLclVGMlgg==
+< server-timing: cdn-upstream-layer;desc="EDGE",cdn-upstream-dns;dur=0,cdn-upstream-connect;dur=67,cdn-upstream-fbl;dur=631,atl-edge;dur=539,atl-edge-internal;dur=29,atl-edge-upstream;dur=510,atl-edge-pop;desc="aws-us-east-1",cdn-cache-miss,cdn-pop;desc="ORD58-P9",cdn-rid;desc="oAGoMKWcZHNr-Z6V4VKPiRMaAZ7gq8IDv7xsZN7K0uMbNLclVGMlgg==",cdn-downstream-fbl;dur=635
+< 
+{ [7700 bytes data]
+100  7700    0  7700    0     0   9377      0 --:--:-- --:--:-- --:--:--  9367
+* Connection #0 to host pixelfad.atlassian.net left intact

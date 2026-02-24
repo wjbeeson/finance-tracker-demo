@@ -1,0 +1,10 @@
+This PR introduces a Dark Mode feature to the frontend.
+
+### Changes:
+- **`frontend/public/index.html`**: Added an inline script to detect and apply the theme (dark/light) immediately on page load from `localStorage` or system preferences. This prevents a 'flash of unstyled content' (FOUC).
+- **`frontend/src/context/ThemeContext.js`**: Implemented a React `ThemeContext` and `ThemeProvider` to manage theme state globally. Features include:
+  - Persistence of theme selection in `localStorage`.
+  - Automatic theme switching based on system `prefers-color-scheme`.
+  - A `toggleTheme` utility.
+  - Smooth transition management via a `no-transition` class removal after initial load.
+- **`frontend/src/index.css`**: Defined global CSS transitions for theme-affected properties (background-color, color, border-color) and added dark mode specific styling for the body background using Tailwind's `dark:` variant.
