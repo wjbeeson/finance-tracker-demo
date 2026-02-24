@@ -60,9 +60,9 @@ jobs:
           JIRA_URL: ${{ secrets.JIRA_URL }}
           JIRA_USERNAME: ${{ secrets.JIRA_USERNAME }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           junie_api_key: ${{ secrets.JUNIE_API_KEY }}
-          allowed_mcp_servers: "mcp_github_checks_server,mcp_github_inline_comment_server,mcp-atlassian"
           base_branch: ${{ github.event.workflow_run.head_branch }}
           prompt: |
             STRICT RULES — READ BEFORE DOING ANYTHING:
@@ -77,9 +77,8 @@ jobs:
             You are executing in a GitHub Actions runner. You have access to:
             - `curl` and `jq` for GitHub API calls. Use the `$GITHUB_TOKEN` environment variable for Authorization.
             - Standard Git commands (`git diff`, `git log`).
-            - The `mcp_github_checks_server` tool (ONLY use if tests failed and you need error logs).
-            - The `mcp-atlassian` Jira MCP tool (`jira_get_issue`) for fetching Jira ticket details.
             Do NOT attempt to use the `gh` CLI tool.
+            Do NOT use any MCP tools. Use curl commands for all API interactions.
             
             PRE-RESOLVED CONTEXT (do not re-derive these values):
             - Repository: '${{ github.repository }}'
@@ -101,15 +100,31 @@ jobs:
             4. Check the test result: The value is '${{ github.event.workflow_run.conclusion }}' (already provided above). Do NOT query any API to re-check this — use this value directly.
             
             5. If test result is 'failure':
-               a. Use the `mcp_github_checks_server` tool to read the failure logs.
-               b. Post a PR comment explaining where the tests failed and suggest a fix.
-               c. IMMEDIATELY STOP AND EXIT. Do nothing else.
+               a. Fetch the check runs for the commit to find the failed check run ID:
+                  curl -s -H "Authorization: token $GITHUB_TOKEN" \
+                    "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.event.workflow_run.head_sha }}/check-runs"
+               b. Fetch the failure logs using the check run ID from step 5a:
+                  curl -s -H "Authorization: token $GITHUB_TOKEN" \
+                    "https://api.github.com/repos/${{ github.repository }}/check-runs/<CHECK_RUN_ID>/annotations"
+               c. Post a PR comment explaining where the tests failed and suggest a fix:
+                  curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
+                    -H "Content-Type: application/json" \
+                    -d '{"body": "<your comment>"}' \
+                    "https://api.github.com/repos/${{ github.repository }}/issues/<PR_NUMBER>/comments"
+               d. IMMEDIATELY STOP AND EXIT. Do nothing else.
             
             6. If test result is 'success', perform the Acceptance Criteria Review:
-               a. Use the `mcp-atlassian` tool (`jira_get_issue`) with ticket ID '${{ github.event.workflow_run.head_branch }}' to fetch the full ticket details including acceptance criteria.
+               a. Fetch the Jira ticket details including acceptance criteria:
+                  curl -s -u "$JIRA_USERNAME:$JIRA_API_TOKEN" \
+                    "$JIRA_URL/rest/api/2/issue/${{ github.event.workflow_run.head_branch }}"
                b. Run `git log origin/master..HEAD --pretty=format:"%h %s"` to get the commit history.
                c. Cross-reference the commit history and code diff (from step 2) against the acceptance criteria.
-               d. Compose and post a PR comment using `curl` with this structure:
+               d. Compose and post a PR comment using the following curl command with this structure:
+                  curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
+                    -H "Content-Type: application/json" \
+                    -d '{"body": "<your composed comment>"}' \
+                    "https://api.github.com/repos/${{ github.repository }}/issues/<PR_NUMBER>/comments"
+                  The comment should follow this structure:
                   ---
                   ## ✅ Tests Passed — Acceptance Criteria Review
                   

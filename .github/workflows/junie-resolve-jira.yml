@@ -28,36 +28,52 @@ jobs:
           JIRA_URL: ${{ secrets.JIRA_URL }}
           JIRA_USERNAME: ${{ secrets.JIRA_USERNAME }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           junie_api_key: ${{ secrets.JUNIE_API_KEY }}
-          # We only need GitHub tools to read the PR, and Atlassian tools to update the ticket
-          allowed_mcp_servers: "mcp_github_pull_request_server,mcp-atlassian"
           prompt: |
             STRICT RULES — READ BEFORE DOING ANYTHING:
             - Do NOT explore the repository file structure.
             - Do NOT open or read source code files directly.
-            - ONLY use the provided MCP tools to interact with GitHub and Jira.
+            - Do NOT use any MCP tools. Use curl commands for all API interactions.
             - Execute ONLY the numbered steps below.
             - After completing the final step, IMMEDIATELY STOP.
             
             ENVIRONMENT CONTEXT:
             - PR Number: '${{ github.event.pull_request.number }}'
             - Branch Name / Jira Ticket ID: '${{ github.event.pull_request.head.ref }}'
+            - Repository: '${{ github.repository }}'
+            You have access to `curl` and `jq` for API calls.
             
             YOUR MISSION — execute this exact sequence:
             
-            1. Use the GitHub MCP server to fetch the final description and diff of PR #${{ github.event.pull_request.number }}.
+            1. Fetch the PR description and diff using curl:
+               curl -s -H "Authorization: token $GITHUB_TOKEN" \
+                 "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}"
+               
+               For the diff:
+               curl -s -H "Authorization: token $GITHUB_TOKEN" \
+                 -H "Accept: application/vnd.github.v3.diff" \
+                 "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}"
             
             2. Based on the diff and PR description, generate a concise, business-friendly "Release Summary" explaining what was actually built and merged.
             
-            3. Use the `mcp-atlassian` tool to post a comment to the Jira ticket associated with the branch '${{ github.event.pull_request.head.ref }}'. The comment should look like this:
-               ---
-               🚀 **PR Merged & Resolved by Junie**
+            3. Post a comment to the Jira ticket '${{ github.event.pull_request.head.ref }}' with the release summary:
+               curl -s -u "$JIRA_USERNAME:$JIRA_API_TOKEN" \
+                 -X POST \
+                 -H "Content-Type: application/json" \
+                 -d '{"body": {"type": "doc", "version": 1, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "🚀 PR Merged & Resolved by Junie\n\nRelease Summary:\n<your summary here>"}]}]}}' \
+                 "$JIRA_URL/rest/api/3/issue/${{ github.event.pull_request.head.ref }}/comment"
+            
+            4. Transition the Jira ticket to "Done" status. First, get available transitions:
+               curl -s -u "$JIRA_USERNAME:$JIRA_API_TOKEN" \
+                 "$JIRA_URL/rest/api/2/issue/${{ github.event.pull_request.head.ref }}/transitions"
                
-               **Release Summary:**
-               [Insert your generated summary here]
-               ---
-               
-            4. Use the `mcp-atlassian` tool to transition the same Jira ticket to the "Done" status (or the equivalent resolved state in the project's workflow).
+               Then transition to "Done" using the transition ID from the response:
+               curl -s -u "$JIRA_USERNAME:$JIRA_API_TOKEN" \
+                 -X POST \
+                 -H "Content-Type: application/json" \
+                 -d '{"transition": {"id": "<DONE_TRANSITION_ID>"}}' \
+                 "$JIRA_URL/rest/api/2/issue/${{ github.event.pull_request.head.ref }}/transitions"
             
             5. IMMEDIATELY STOP AND EXIT. Do nothing else.
