@@ -67,8 +67,8 @@ const FileUpload = ({ onUploadSuccess }) => {
   };
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-      <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Upload Expenses</h2>
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+      <h2 className="text-lg font-semibold text-slate-800 mb-4">Upload Expenses</h2>
       
       <div
         onClick={handleClick}
@@ -79,8 +79,8 @@ const FileUpload = ({ onUploadSuccess }) => {
           border-2 border-dashed rounded-lg p-8 text-center cursor-pointer
           transition-all duration-200 ease-in-out
           ${isDragging 
-            ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' 
-            : 'border-slate-300 dark:border-slate-600 hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+            ? 'border-indigo-500 bg-indigo-50' 
+            : 'border-slate-300 hover:border-indigo-400 hover:bg-slate-50'
           }
           ${isUploading ? 'opacity-50 pointer-events-none' : ''}
         `}
@@ -96,10 +96,10 @@ const FileUpload = ({ onUploadSuccess }) => {
         <div className="flex flex-col items-center gap-3">
           <div className={`
             w-12 h-12 rounded-full flex items-center justify-center
-            ${isDragging ? 'bg-indigo-100 dark:bg-indigo-900/40' : 'bg-slate-100 dark:bg-slate-700'}
+            ${isDragging ? 'bg-indigo-100' : 'bg-slate-100'}
           `}>
             <svg 
-              className={`w-6 h-6 ${isDragging ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400'}`}
+              className={`w-6 h-6 ${isDragging ? 'text-indigo-600' : 'text-slate-500'}`}
               fill="none" 
               stroke="currentColor" 
               viewBox="0 0 24 24"
@@ -116,14 +116,14 @@ const FileUpload = ({ onUploadSuccess }) => {
           {isUploading ? (
             <div className="flex items-center gap-2">
               <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-              <span className="text-slate-600 dark:text-slate-300">Uploading...</span>
+              <span className="text-slate-600">Uploading...</span>
             </div>
           ) : (
             <>
-              <p className="text-slate-700 dark:text-slate-200 font-medium">
-                Drop your CSV file here, or <span className="text-indigo-600 dark:text-indigo-400">browse</span>
+              <p className="text-slate-700 font-medium">
+                Drop your CSV file here, or <span className="text-indigo-600">browse</span>
               </p>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+              <p className="text-sm text-slate-500">
                 CSV with columns: description, amount, date, category
               </p>
             </>
@@ -135,8 +135,8 @@ const FileUpload = ({ onUploadSuccess }) => {
         <div className={`
           mt-4 p-3 rounded-lg text-sm
           ${uploadStatus.type === 'success' 
-            ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' 
-            : 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800'
+            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+            : 'bg-red-50 text-red-700 border border-red-200'
           }
         `}>
           {uploadStatus.message}
