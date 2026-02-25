@@ -26,7 +26,7 @@ const CustomTooltip = ({ active, payload, label, period }) => {
   if (active && payload && payload.length) {
     const item = payload[0];
     return (
-      <div className="bg-white dark:bg-slate-800 px-4 py-3 shadow-lg rounded-lg border border-slate-200 dark:border-slate-700">
+      <div className="bg-white dark:bg-slate-900 px-4 py-3 shadow-lg rounded-lg border border-slate-200 dark:border-slate-800">
         <p className="font-medium text-slate-800 dark:text-slate-100">
           {formatDateLabel(label, period)}
         </p>
@@ -41,7 +41,7 @@ const TimeSeriesChart = ({ data, isLoading, period }) => {
   const { theme } = useTheme();
   const total = data?.reduce((sum, item) => sum + item.total, 0) || 0;
 
-  const gridColor = theme === 'dark' ? '#334155' : '#e2e8f0';
+  const gridColor = theme === 'dark' ? '#1e293b' : '#e2e8f0';
   const textColor = theme === 'dark' ? '#94a3b8' : '#64748b';
 
   if (isLoading) {
@@ -55,7 +55,7 @@ const TimeSeriesChart = ({ data, isLoading, period }) => {
   if (!data || data.length === 0) {
     return (
       <div className="h-80 flex flex-col items-center justify-center text-slate-500 dark:text-slate-400">
-        <svg className="w-16 h-16 mb-4 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-16 h-16 mb-4 text-slate-300 dark:text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
         </svg>
         <p>No data for this period</p>
