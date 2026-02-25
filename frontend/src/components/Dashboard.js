@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getAllExpenses, getExpenseSummary, getExpenseTimeSeries, getAvailablePeriods } from '../services/expenseApi';
+import { getAllExpenses, getExpenseSummary, getExpenseTimeSeries, getPeriodLabel } from '../services/expenseApi';
 import { useTheme } from '../context/ThemeContext';
 import FileUpload from './FileUpload';
 import DonutChart from './DonutChart';
@@ -27,23 +27,22 @@ const Dashboard = () => {
   const [graphType, setGraphType] = useState('donut');
   const [showGraphMenu, setShowGraphMenu] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState('month');
+  const [periodOffset, setPeriodOffset] = useState(0);
+  const [periodLabel, setPeriodLabel] = useState('');
   const [timeSeriesData, setTimeSeriesData] = useState([]);
   const [isTimeSeriesLoading, setIsTimeSeriesLoading] = useState(false);
-  const [availablePeriods, setAvailablePeriods] = useState({ week: false, month: false, year: false });
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     
     try {
-      const [expensesData, summaryData, periodsData] = await Promise.all([
+      const [expensesData, summaryData] = await Promise.all([
         getAllExpenses(),
         getExpenseSummary(),
-        getAvailablePeriods(),
       ]);
       setExpenses(expensesData);
       setSummary(summaryData);
-      setAvailablePeriods(periodsData);
     } catch (err) {
       console.error('Error fetching data:', err);
       setError('Failed to load expense data. Please make sure the backend is running.');
@@ -52,14 +51,19 @@ const Dashboard = () => {
     }
   }, []);
 
-  const fetchTimeSeries = useCallback(async (period) => {
+  const fetchTimeSeries = useCallback(async (period, offset) => {
     setIsTimeSeriesLoading(true);
     try {
-      const data = await getExpenseTimeSeries(period);
+      const [data, label] = await Promise.all([
+        getExpenseTimeSeries(period, offset),
+        getPeriodLabel(period, offset),
+      ]);
       setTimeSeriesData(data);
+      setPeriodLabel(label);
     } catch (err) {
       console.error('Error fetching time series:', err);
       setTimeSeriesData([]);
+      setPeriodLabel('');
     } finally {
       setIsTimeSeriesLoading(false);
     }
@@ -71,20 +75,25 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (graphType === 'timeseries') {
-      fetchTimeSeries(selectedPeriod);
+      fetchTimeSeries(selectedPeriod, periodOffset);
     }
-  }, [graphType, selectedPeriod, fetchTimeSeries]);
+  }, [graphType, selectedPeriod, periodOffset, fetchTimeSeries]);
 
   const handleUploadSuccess = () => {
     fetchData();
     if (graphType === 'timeseries') {
-      fetchTimeSeries(selectedPeriod);
+      fetchTimeSeries(selectedPeriod, periodOffset);
     }
   };
 
   const handleGraphTypeSelect = (type) => {
     setGraphType(type);
     setShowGraphMenu(false);
+  };
+
+  const handlePeriodChange = (period) => {
+    setSelectedPeriod(period);
+    setPeriodOffset(0);
   };
 
   return (
@@ -199,33 +208,62 @@ const Dashboard = () => {
                   {graphType === 'timeseries' && (
                     <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-700 rounded-lg p-1">
                       {PERIOD_OPTIONS.map((option) => {
-                        const isAvailable = availablePeriods[option.id];
                         const isSelected = selectedPeriod === option.id;
                         return (
-                          <div key={option.id} className="relative group">
-                            <button
-                              onClick={() => isAvailable && setSelectedPeriod(option.id)}
-                              disabled={!isAvailable}
-                              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                                isSelected && isAvailable
-                                  ? 'bg-white dark:bg-slate-600 text-indigo-700 dark:text-indigo-300 shadow-sm'
-                                  : isAvailable
-                                    ? 'text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100'
-                                    : 'text-slate-400 dark:text-slate-500 cursor-not-allowed'
-                              }`}
-                              aria-label={`Select ${option.label} period`}
-                            >
-                              {option.label}
-                            </button>
-                            {!isAvailable && (
-                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-800 dark:bg-slate-600 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                No data available for this period
-                                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800 dark:border-t-slate-600"></div>
-                              </div>
-                            )}
-                          </div>
+                          <button
+                            key={option.id}
+                            onClick={() => handlePeriodChange(option.id)}
+                            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                              isSelected
+                                ? 'bg-white dark:bg-slate-600 text-indigo-700 dark:text-indigo-300 shadow-sm'
+                                : 'text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100'
+                            }`}
+                            aria-label={`Select ${option.label} period`}
+                          >
+                            {option.label}
+                          </button>
                         );
                       })}
+                    </div>
+                  )}
+
+                  {/* Period Navigation */}
+                  {graphType === 'timeseries' && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setPeriodOffset(prev => prev - 1)}
+                        className="p-1.5 rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-200 transition-colors"
+                        aria-label="Previous period"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-200 min-w-[140px] text-center">
+                        {periodLabel}
+                      </span>
+                      <button
+                        onClick={() => setPeriodOffset(prev => prev + 1)}
+                        disabled={periodOffset >= 0}
+                        className={`p-1.5 rounded-md transition-colors ${
+                          periodOffset >= 0
+                            ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed'
+                            : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-slate-700 dark:hover:text-slate-200'
+                        }`}
+                        aria-label="Next period"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                      {periodOffset !== 0 && (
+                        <button
+                          onClick={() => setPeriodOffset(0)}
+                          className="px-2 py-1 text-xs font-medium rounded-md bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
+                        >
+                          Today
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
