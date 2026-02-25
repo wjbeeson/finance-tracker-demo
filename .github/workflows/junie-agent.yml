@@ -88,7 +88,8 @@ jobs:
         id: diff
         shell: bash
         run: |
-          git diff origin/master..HEAD > /tmp/diff.txt
+          # Exclude workflow files and artifacts so Junie only sees application code
+          git diff origin/master..HEAD -- . ':!.github/' ':!.output.txt' > /tmp/diff.txt
           echo "path=/tmp/diff.txt" >> "$GITHUB_OUTPUT"
           echo "Diff size: $(wc -l < /tmp/diff.txt) lines"
 
@@ -96,8 +97,11 @@ jobs:
         id: commits
         shell: bash
         run: |
+          # Only include commits related to application changes (exclude @junie-agent noise)
           git log origin/master..HEAD --pretty=format:"%h %s" > /tmp/commits.txt
           echo "path=/tmp/commits.txt" >> "$GITHUB_OUTPUT"
+          echo "Commits:"
+          cat /tmp/commits.txt
 
       - name: Update PR description (procedural)
         env:
@@ -150,15 +154,20 @@ jobs:
           junie_api_key: ${{ secrets.JUNIE_API_KEY }}
           silent_mode: "true"
           prompt: |
-            You are given a diff and test failure annotations as files.
-            Your ONLY job: explain what failed and suggest a fix.
+            Read these 2 files, then write /tmp/failure_comment.txt. That is your ENTIRE job.
 
-            DIFF: Read the file at /tmp/diff.txt
-            ANNOTATIONS: Read the file at /tmp/annotations.txt
+            FILES TO READ:
+            1. /tmp/diff.txt (code diff)
+            2. /tmp/annotations.txt (test failure annotations)
 
-            OUTPUT: Write your analysis to /tmp/failure_comment.txt in GitHub-Flavored Markdown.
-            Use ## for headings, **bold** for emphasis, ` for inline code, ``` for code blocks, and - for bullet lists.
-            Do nothing else — no API calls, no exploring files, no MCP tools. Just read, analyze, and write.
+            INSTRUCTIONS:
+            - Read both files with `cat /tmp/diff.txt /tmp/annotations.txt`
+            - Do NOT run grep, sed, head, tail, or any other exploration commands
+            - Immediately write /tmp/failure_comment.txt after reading
+
+            OUTPUT: Write in GitHub-Flavored Markdown (## headings, **bold**, ` code, ``` blocks, - bullets).
+            Explain what failed and suggest a fix. Keep it concise.
+            Do NOTHING else. No API calls, no grep, no file exploration. Just read → write.
 
       - name: Post failure comment
         if: github.event.workflow_run.conclusion == 'failure'
@@ -201,55 +210,50 @@ jobs:
           junie_api_key: ${{ secrets.JUNIE_API_KEY }}
           silent_mode: "true"
           prompt: |
-            You are given a diff, commit log, and acceptance criteria as files.
-            Your ONLY job: write a single review comment with two parts.
+            Read these 3 files, then write /tmp/review.txt. That is your ENTIRE job.
 
-            DIFF: Read the file at /tmp/diff.txt
-            COMMITS: Read the file at /tmp/commits.txt
-            ACCEPTANCE CRITERIA: Read the file at /tmp/criteria.txt
+            FILES TO READ:
+            1. /tmp/diff.txt (code diff)
+            2. /tmp/commits.txt (commit log)
+            3. /tmp/criteria.txt (acceptance criteria)
 
-            OUTPUT: Write your review to /tmp/review.txt in GitHub-Flavored Markdown.
-            Use ## for headings, ### for sub-headings, **bold** for emphasis, ` for inline code, ``` for code blocks, and - for bullet lists.
+            INSTRUCTIONS:
+            - Read all 3 files with a single `cat /tmp/diff.txt /tmp/commits.txt /tmp/criteria.txt`
+            - Do NOT run grep, sed, head, tail, or any other commands to explore the diff
+            - Do NOT explore the repository or run any other tools
+            - Immediately write /tmp/review.txt after reading
 
-            TITLE — Choose based on your assessment:
-            - If ALL criteria are ✅ Met: ## Acceptance Criteria Met ✅
-            - If ANY criterion is ❌ or ⚠️: ## Acceptance Criteria Failed ❌
-
-            Follow this EXACT structure (copy it, fill in the blanks):
+            OUTPUT FORMAT: Write /tmp/review.txt in GitHub-Flavored Markdown using this exact template:
 
             ---BEGIN TEMPLATE---
             **🟢 All tests passed** | **Jira Ticket:** [${{ steps.jira_ticket.outputs.ticket }}](${{ secrets.JIRA_URL }}/browse/${{ steps.jira_ticket.outputs.ticket }})
 
             ## Acceptance Criteria Met ✅
-            _(or ## Acceptance Criteria Failed ❌)_
+            _(use "## Acceptance Criteria Failed ❌" if ANY criterion is not fully met)_
 
             ### Summary of Changes
-            > A 1–2 sentence plain-language overview of what this PR does, suitable for a project manager.
+            > 1–2 sentence plain-language overview of what this PR does (for a project manager).
 
             **Files changed:**
-            - `path/to/file.ext` — What was changed and why
-            - `path/to/other.ext` — What was changed and why
-            _(one bullet per file touched in the diff; group trivial changes)_
+            - `path/to/file.ext` — what changed and why
 
             ### Acceptance Criteria
 
-            ✅ **Criterion name or description**
-            &nbsp;&nbsp;&nbsp;&nbsp;**MET:** One-line explanation of how the code satisfies this.
+            ✅ **Criterion name**
+            &nbsp;&nbsp;&nbsp;&nbsp;**MET:** How the code satisfies this.
 
-            ❌ **Criterion name or description**
-            &nbsp;&nbsp;&nbsp;&nbsp;**NOT MET:** One-line explanation of what is missing or wrong.
+            ❌ **Criterion name**
+            &nbsp;&nbsp;&nbsp;&nbsp;**NOT MET:** What is missing.
 
-            ⚠️ **Criterion name or description**
-            &nbsp;&nbsp;&nbsp;&nbsp;**PARTIAL:** One-line explanation of what is done and what remains.
-
-            _(Repeat for every criterion from the acceptance criteria file. Use ✅, ❌, or ⚠️ exactly as shown.)_
+            ⚠️ **Criterion name**
+            &nbsp;&nbsp;&nbsp;&nbsp;**PARTIAL:** What is done and what remains.
             ---END TEMPLATE---
 
             RULES:
-            - Every criterion from the acceptance criteria file MUST appear — do not skip any.
-            - Use the emoji + bold label format exactly: ✅ **MET:**, ❌ **NOT MET:**, ⚠️ **PARTIAL:**
-            - Keep explanations to one sentence each.
-            - Do nothing else — no API calls, no exploring files, no MCP tools. Just read, analyze, and write.
+            - Every criterion from /tmp/criteria.txt MUST appear — do not skip any.
+            - Use ✅ **MET:**, ❌ **NOT MET:**, or ⚠️ **PARTIAL:** exactly as shown.
+            - One sentence per explanation.
+            - Do NOTHING else. No API calls, no grep, no file exploration. Just read → write.
 
       - name: Post review comment
         if: github.event.workflow_run.conclusion == 'success' && steps.jira_ticket.outputs.ticket != ''
