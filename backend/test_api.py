@@ -2,6 +2,7 @@ import pytest
 import os
 import tempfile
 import io
+import calendar
 from datetime import datetime, timedelta
 from unittest.mock import patch
 from app import app, init_db, get_db, DATABASE
@@ -314,10 +315,14 @@ class TestGetTimeSeries:
         client.post("/api/expenses/upload", data=data, content_type="multipart/form-data")
 
     def test_empty_timeseries(self, client):
-        """Timeseries with no data returns an empty list."""
+        """Timeseries with no data returns gap-filled zeros for the full period."""
         resp = client.get("/api/expenses/timeseries?period=month")
         assert resp.status_code == 200
-        assert resp.get_json() == []
+        data = resp.get_json()
+        now = datetime.now()
+        days_in_month = calendar.monthrange(now.year, now.month)[1]
+        assert len(data) == days_in_month
+        assert all(row["total"] == 0 for row in data)
 
     def test_invalid_period(self, client):
         """Invalid period returns 400."""
@@ -326,7 +331,7 @@ class TestGetTimeSeries:
         assert "Invalid period" in resp.get_json()["error"]
 
     def test_month_period(self, client):
-        """Month period groups by date within current month."""
+        """Month period returns all days in current month with gap-filled zeros."""
         now = datetime.now()
         date1 = f"{now.year}-{now.month:02d}-05"
         date2 = f"{now.year}-{now.month:02d}-05"
@@ -339,13 +344,17 @@ class TestGetTimeSeries:
         resp = client.get("/api/expenses/timeseries?period=month")
         assert resp.status_code == 200
         data = resp.get_json()
-        assert len(data) == 2
+        days_in_month = calendar.monthrange(now.year, now.month)[1]
+        assert len(data) == days_in_month
         totals = {row["date"]: row["total"] for row in data}
         assert totals[date1] == pytest.approx(30.00)
         assert totals[date3] == pytest.approx(30.00)
+        # All other days should be zero-filled
+        zero_days = [row for row in data if row["date"] not in (date1, date3)]
+        assert all(row["total"] == 0 for row in zero_days)
 
     def test_week_period(self, client):
-        """Week period returns only expenses from the current week."""
+        """Week period returns all 7 days with gap-filled zeros."""
         now = datetime.now()
         start_of_week = now - timedelta(days=now.weekday())
         in_week = start_of_week.strftime("%Y-%m-%d")
@@ -357,11 +366,16 @@ class TestGetTimeSeries:
         resp = client.get("/api/expenses/timeseries?period=week")
         assert resp.status_code == 200
         data = resp.get_json()
-        assert len(data) == 1
-        assert data[0]["total"] == pytest.approx(10.00)
+        assert len(data) == 7
+        totals = {row["date"]: row["total"] for row in data}
+        assert totals[in_week] == pytest.approx(10.00)
+        # Out-of-week expense should not appear; remaining days are zero
+        assert out_of_week not in totals
+        zero_days = [row for row in data if row["date"] != in_week]
+        assert all(row["total"] == 0 for row in zero_days)
 
     def test_year_period_groups_by_month(self, client):
-        """Year period aggregates expenses by month."""
+        """Year period returns all 12 months with gap-filled zeros."""
         now = datetime.now()
         self._upload(client, [
             ("A", "10.00", f"{now.year}-01-15", "Food"),
@@ -371,20 +385,26 @@ class TestGetTimeSeries:
         resp = client.get("/api/expenses/timeseries?period=year")
         assert resp.status_code == 200
         data = resp.get_json()
-        assert len(data) == 2
+        assert len(data) == 12
         totals = {row["date"]: row["total"] for row in data}
         assert totals[f"{now.year}-01"] == pytest.approx(30.00)
         assert totals[f"{now.year}-03"] == pytest.approx(30.00)
+        # Months without data should be zero
+        zero_months = [row for row in data if row["date"] not in (f"{now.year}-01", f"{now.year}-03")]
+        assert all(row["total"] == 0 for row in zero_months)
 
     def test_default_period_is_month(self, client):
-        """Default period is month when not specified."""
+        """Default period is month when not specified, returns full month gap-filled."""
         now = datetime.now()
         date1 = f"{now.year}-{now.month:02d}-01"
         self._upload(client, [("A", "10.00", date1, "Food")])
         resp = client.get("/api/expenses/timeseries")
         assert resp.status_code == 200
         data = resp.get_json()
-        assert len(data) == 1
+        days_in_month = calendar.monthrange(now.year, now.month)[1]
+        assert len(data) == days_in_month
+        totals = {row["date"]: row["total"] for row in data}
+        assert totals[date1] == pytest.approx(10.00)
 
     def test_timeseries_ordered_by_date_asc(self, client):
         """Results are ordered by date ascending."""
