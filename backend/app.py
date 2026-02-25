@@ -239,7 +239,6 @@ def get_available_periods():
 
 @app.route('/api/expenses/period-label', methods=['GET'])
 def get_period_label():
-    pass
     """Return a human-readable label for a given period and offset."""
     period = request.args.get('period', 'month')
     if period not in ('week', 'month', 'year'):
