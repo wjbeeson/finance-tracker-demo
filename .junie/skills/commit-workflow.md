@@ -39,15 +39,21 @@ Before making any commits, follow this workflow:
 - Format: `[<TICKET-ID>] <description> @junie-agent`
 - Example: `[FIN-42] Add transaction filtering endpoint @junie-agent`
 
-### 5. Commit Flow Summary
+### 5. Jira Status Transition
+- When a commit is made, transition the associated Jira ticket to **"In Progress"** if it is not already in that status.
+- Use the Jira transitions API to move the ticket. First retrieve available transitions for the issue, then apply the "In Progress" transition.
+- This MUST happen automatically as part of every commit workflow — do not wait for the user to request it.
+
+### 6. Commit Flow Summary
 For every task:
 1. Identify or request the Jira ticket number
 2. Fetch from origin and check if a branch named exactly `<TICKET-ID>` exists remotely
 3. Pull the remote branch OR create a new local branch with that name
 4. Make changes and commit with `[<TICKET-ID>]` prefix and `@junie-agent` tag in the message
 5. Push the branch to origin
+6. Transition the Jira ticket to **"In Progress"** (if not already)
 
-### 6. CI Integration (Optional)
+### 7. CI Integration (Optional)
 - If the commit is intended for automated PR creation and Junie analysis,
   append `@junie-agent` to the commit message.
 - Example: `[FIN-42] Add transaction filtering endpoint @junie-agent`

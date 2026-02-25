@@ -105,7 +105,7 @@ const Dashboard = () => {
             <div className="flex items-center gap-3">
               <img src="/acme-logo.svg" alt="Acme Expenses" className="w-10 h-10 rounded-lg" />
               <div>
-                <h1 className="text-4xl font-bold text-slate-800 dark:text-slate-100">Acme Expenses</h1>
+                <h1 className="text-5xl font-bold text-slate-800 dark:text-slate-100">Acme Expenses</h1>
                 <p className="text-sm text-slate-500 dark:text-slate-400">Track and visualize your spending</p>
               </div>
             </div>
