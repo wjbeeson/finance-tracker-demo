@@ -29,6 +29,34 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
 
+      - name: Ensure PR exists
+        id: ensure_pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          BRANCH="${{ github.event.workflow_run.head_branch }}"
+          REPO="${{ github.repository }}"
+          OWNER="${{ github.repository_owner }}"
+
+          # Check for existing open PR
+          PR_NUMBER=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/$REPO/pulls?head=$OWNER:$BRANCH&state=open" \
+            | jq '.[0].number // empty')
+
+          if [ -n "$PR_NUMBER" ]; then
+            echo "Found existing PR #$PR_NUMBER"
+          else
+            # Create a new PR
+            PR_NUMBER=$(curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"title\":\"$BRANCH: Automated PR\",\"head\":\"$BRANCH\",\"base\":\"master\",\"body\":\"Automated PR for branch \`$BRANCH\`. Description will be updated by Junie.\"}" \
+              "https://api.github.com/repos/$REPO/pulls" \
+              | jq '.number')
+            echo "Created new PR #$PR_NUMBER"
+          fi
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
       - name: Run Junie Analysis
         uses: JetBrains/junie-github-action@v0
         env:
@@ -38,6 +66,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           junie_api_key: ${{ secrets.JUNIE_API_KEY }}
+          silent_mode: "true"
           prompt: |
             STRICT RULES — READ BEFORE DOING ANYTHING:
             - Do NOT explore the repository file structure (no `ls`, `find`, `cat` on repo files).
@@ -59,45 +88,48 @@ jobs:
             - Branch: '${{ github.event.workflow_run.head_branch }}'
             - Commit SHA: '${{ github.event.workflow_run.head_sha }}'
             - Test result: '${{ github.event.workflow_run.conclusion }}'
+            - PR Number: '${{ steps.ensure_pr.outputs.pr_number }}'
             - The branch name IS the Jira ticket ID (e.g., `FT-42`). Jira project space key: "FT".
+            
+            CRITICAL: A Pull Request already exists (PR #${{ steps.ensure_pr.outputs.pr_number }}). Do NOT create a new PR. Use the PR number above for all operations.
             
             YOUR MISSION — execute this exact sequence:
             
-            1. Find the open Pull Request for branch '${{ github.event.workflow_run.head_branch }}' using:
-               curl -s -H "Authorization: token $GITHUB_TOKEN" \
-                 "https://api.github.com/repos/${{ github.repository }}/pulls?head=${{ github.repository_owner }}:${{ github.event.workflow_run.head_branch }}&state=open"
+            1. Run `git diff origin/master..HEAD` to get the code changes.
             
-            2. Run `git diff origin/master..HEAD` to get the code changes.
+            2. Update the PR description using `curl -X PATCH` with a detailed summary of the code changes from step 1:
+               curl -s -X PATCH -H "Authorization: token $GITHUB_TOKEN" \
+                 -H "Content-Type: application/json" \
+                 -d '{"body": "<your summary>"}' \
+                 "https://api.github.com/repos/${{ github.repository }}/pulls/${{ steps.ensure_pr.outputs.pr_number }}"
             
-            3. Update the PR description using `curl -X PATCH` with a detailed summary of the code changes from step 2.
+            3. Check the test result: The value is '${{ github.event.workflow_run.conclusion }}' (already provided above). Do NOT query any API to re-check this — use this value directly.
             
-            4. Check the test result: The value is '${{ github.event.workflow_run.conclusion }}' (already provided above). Do NOT query any API to re-check this — use this value directly.
-            
-            5. If test result is 'failure':
+            4. If test result is 'failure':
                a. Fetch the check runs for the commit to find the failed check run ID:
                   curl -s -H "Authorization: token $GITHUB_TOKEN" \
                     "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.event.workflow_run.head_sha }}/check-runs"
-               b. Fetch the failure logs using the check run ID from step 5a:
+               b. Fetch the failure logs using the check run ID from step 4a:
                   curl -s -H "Authorization: token $GITHUB_TOKEN" \
                     "https://api.github.com/repos/${{ github.repository }}/check-runs/<CHECK_RUN_ID>/annotations"
                c. Post a PR comment explaining where the tests failed and suggest a fix:
                   curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
                     -H "Content-Type: application/json" \
                     -d '{"body": "<your comment>"}' \
-                    "https://api.github.com/repos/${{ github.repository }}/issues/<PR_NUMBER>/comments"
+                    "https://api.github.com/repos/${{ github.repository }}/issues/${{ steps.ensure_pr.outputs.pr_number }}/comments"
                d. IMMEDIATELY STOP AND EXIT. Do nothing else.
             
-            6. If test result is 'success', perform the Acceptance Criteria Review:
+            5. If test result is 'success', perform the Acceptance Criteria Review:
                a. Fetch the Jira ticket details including acceptance criteria:
                   curl -s -u "$JIRA_USERNAME:$JIRA_API_TOKEN" \
                     "$JIRA_URL/rest/api/2/issue/${{ github.event.workflow_run.head_branch }}"
                b. Run `git log origin/master..HEAD --pretty=format:"%h %s"` to get the commit history.
-               c. Cross-reference the commit history and code diff (from step 2) against the acceptance criteria.
+               c. Cross-reference the commit history and code diff (from step 1) against the acceptance criteria.
                d. Compose and post a PR comment using the following curl command with this structure:
                   curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
                     -H "Content-Type: application/json" \
                     -d '{"body": "<your composed comment>"}' \
-                    "https://api.github.com/repos/${{ github.repository }}/issues/<PR_NUMBER>/comments"
+                    "https://api.github.com/repos/${{ github.repository }}/issues/${{ steps.ensure_pr.outputs.pr_number }}/comments"
                   The comment should follow this structure:
                   ---
                   ## ✅ Tests Passed — Acceptance Criteria Review
