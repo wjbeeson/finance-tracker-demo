@@ -8,7 +8,6 @@ on:
 
 jobs:
   junie-agent-review:
-    # Force stop if it hangs for more than 5 minutes
     timeout-minutes: 10
 
     # Only run if the commit message contains @junie-agent
@@ -50,102 +49,204 @@ jobs:
             # Create a new PR
             PR_NUMBER=$(curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
               -H "Content-Type: application/json" \
-              -d "{\"title\":\"$BRANCH: Automated PR\",\"head\":\"$BRANCH\",\"base\":\"master\",\"body\":\"Automated PR for branch \`$BRANCH\`. Description will be updated by Junie.\"}" \
+              -d "{\"title\":\"$BRANCH: Automated PR\",\"head\":\"$BRANCH\",\"base\":\"master\",\"body\":\"Automated PR for branch \`$BRANCH\`. Description will be updated shortly.\"}" \
               "https://api.github.com/repos/$REPO/pulls" \
               | jq '.number')
             echo "Created new PR #$PR_NUMBER"
           fi
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
 
-      - name: Run Junie Analysis
-        uses: JetBrains/junie-github-action@v0
+      - name: Extract Jira Ticket
+        id: jira_ticket
         env:
-          JIRA_URL: ${{ secrets.JIRA_URL }}
-          JIRA_USERNAME: ${{ secrets.JIRA_USERNAME }}
-          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          BRANCH="${{ github.event.workflow_run.head_branch }}"
+
+          # Try branch name first
+          TICKET=$(echo "$BRANCH" | grep -oE 'FT-[0-9]+' || true)
+
+          # Fallback: extract from PR title
+          if [ -z "$TICKET" ]; then
+            PR_TITLE=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+              "https://api.github.com/repos/${{ github.repository }}/pulls/${{ steps.ensure_pr.outputs.pr_number }}" \
+              | jq -r '.title')
+            TICKET=$(echo "$PR_TITLE" | grep -oE 'FT-[0-9]+' || true)
+          fi
+
+          # Fallback: extract from head commit message
+          if [ -z "$TICKET" ]; then
+            TICKET=$(echo "${{ github.event.workflow_run.head_commit.message }}" \
+              | grep -oE 'FT-[0-9]+' || true)
+          fi
+
+          echo "ticket=$TICKET" >> "$GITHUB_OUTPUT"
+          echo "Resolved Jira ticket: ${TICKET:-NONE}"
+
+      - name: Gather diff
+        id: diff
+        shell: bash
+        run: |
+          git diff origin/master..HEAD > /tmp/diff.txt
+          echo "path=/tmp/diff.txt" >> "$GITHUB_OUTPUT"
+          echo "Diff size: $(wc -l < /tmp/diff.txt) lines"
+
+      - name: Gather commit log
+        id: commits
+        shell: bash
+        run: |
+          git log origin/master..HEAD --pretty=format:"%h %s" > /tmp/commits.txt
+          echo "path=/tmp/commits.txt" >> "$GITHUB_OUTPUT"
+
+      - name: Update PR description (procedural)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          STATS=$(git diff --stat origin/master..HEAD)
+          TICKET="${{ steps.jira_ticket.outputs.ticket }}"
+          BRANCH="${{ github.event.workflow_run.head_branch }}"
+          TEST_RESULT="${{ github.event.workflow_run.conclusion }}"
+
+          BODY="## Changes on \`$BRANCH\`\n"
+          if [ -n "$TICKET" ]; then
+            BODY+="**Jira Ticket:** [$TICKET](${{ secrets.JIRA_URL }}/browse/$TICKET)\n"
+          fi
+          BODY+="\n**Test result:** $TEST_RESULT\n"
+          BODY+="\n\`\`\`\n${STATS}\n\`\`\`"
+
+          jq -n --arg body "$BODY" '{"body": $body}' | \
+            curl -s -X PATCH -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d @- \
+              "https://api.github.com/repos/${{ github.repository }}/pulls/${{ steps.ensure_pr.outputs.pr_number }}"
+
+      # === FAILURE PATH ===
+
+      - name: Fetch test failure annotations
+        id: failures
+        if: github.event.workflow_run.conclusion == 'failure'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          CHECK_ID=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.event.workflow_run.head_sha }}/check-runs" \
+            | jq '[.check_runs[] | select(.conclusion=="failure")][0].id')
+
+          if [ "$CHECK_ID" != "null" ] && [ -n "$CHECK_ID" ]; then
+            curl -s -H "Authorization: token $GITHUB_TOKEN" \
+              "https://api.github.com/repos/${{ github.repository }}/check-runs/$CHECK_ID/annotations" \
+              > /tmp/annotations.txt
+          else
+            echo "No failed check run annotations found." > /tmp/annotations.txt
+          fi
+          echo "path=/tmp/annotations.txt" >> "$GITHUB_OUTPUT"
+
+      - name: Junie — Failure Diagnosis
+        if: github.event.workflow_run.conclusion == 'failure'
+        uses: JetBrains/junie-github-action@v0
         with:
           junie_api_key: ${{ secrets.JUNIE_API_KEY }}
           silent_mode: "true"
           prompt: |
-            STRICT RULES — READ BEFORE DOING ANYTHING:
-            - Do NOT explore the repository file structure (no `ls`, `find`, `cat` on repo files).
-            - Do NOT open or read workflow YAML files, Dockerfiles, config files, or any source code files.
-            - Do NOT investigate the CI/CD environment, installed tools, or system setup.
-            - Do NOT verify or second-guess the test results provided below — they are authoritative.
-            - Execute ONLY the numbered steps below. Do not add, skip, or reorder steps.
-            - After completing the final step, IMMEDIATELY STOP. Do not perform any additional analysis.
-            
-            ENVIRONMENT CONTEXT:
-            You are executing in a GitHub Actions runner. You have access to:
-            - `curl` and `jq` for GitHub API calls. Use the `$GITHUB_TOKEN` environment variable for Authorization.
-            - Standard Git commands (`git diff`, `git log`).
-            Do NOT attempt to use the `gh` CLI tool.
-            Do NOT use any MCP tools. Use curl commands for all API interactions.
-            
-            PRE-RESOLVED CONTEXT (do not re-derive these values):
-            - Repository: '${{ github.repository }}'
-            - Branch: '${{ github.event.workflow_run.head_branch }}'
-            - Commit SHA: '${{ github.event.workflow_run.head_sha }}'
-            - Test result: '${{ github.event.workflow_run.conclusion }}'
-            - PR Number: '${{ steps.ensure_pr.outputs.pr_number }}'
-            - The branch name IS the Jira ticket ID (e.g., `FT-42`). Jira project space key: "FT".
-            
-            CRITICAL: A Pull Request already exists (PR #${{ steps.ensure_pr.outputs.pr_number }}). Do NOT create a new PR. Use the PR number above for all operations.
-            
-            YOUR MISSION — execute this exact sequence:
-            
-            1. Run `git diff origin/master..HEAD` to get the code changes.
-            
-            2. Update the PR description using `curl -X PATCH` with a detailed summary of the code changes from step 1:
-               curl -s -X PATCH -H "Authorization: token $GITHUB_TOKEN" \
-                 -H "Content-Type: application/json" \
-                 -d '{"body": "<your summary>"}' \
-                 "https://api.github.com/repos/${{ github.repository }}/pulls/${{ steps.ensure_pr.outputs.pr_number }}"
-            
-            3. Check the test result: The value is '${{ github.event.workflow_run.conclusion }}' (already provided above). Do NOT query any API to re-check this — use this value directly.
-            
-            4. If test result is 'failure':
-               a. Fetch the check runs for the commit to find the failed check run ID:
-                  curl -s -H "Authorization: token $GITHUB_TOKEN" \
-                    "https://api.github.com/repos/${{ github.repository }}/commits/${{ github.event.workflow_run.head_sha }}/check-runs"
-               b. Fetch the failure logs using the check run ID from step 4a:
-                  curl -s -H "Authorization: token $GITHUB_TOKEN" \
-                    "https://api.github.com/repos/${{ github.repository }}/check-runs/<CHECK_RUN_ID>/annotations"
-               c. Post a PR comment explaining where the tests failed and suggest a fix:
-                  curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
-                    -H "Content-Type: application/json" \
-                    -d '{"body": "<your comment>"}' \
-                    "https://api.github.com/repos/${{ github.repository }}/issues/${{ steps.ensure_pr.outputs.pr_number }}/comments"
-               d. IMMEDIATELY STOP AND EXIT. Do nothing else.
-            
-            5. If test result is 'success', perform the Acceptance Criteria Review:
-               a. Fetch the Jira ticket details including acceptance criteria:
-                  curl -s -u "$JIRA_USERNAME:$JIRA_API_TOKEN" \
-                    "$JIRA_URL/rest/api/2/issue/${{ github.event.workflow_run.head_branch }}"
-               b. Run `git log origin/master..HEAD --pretty=format:"%h %s"` to get the commit history.
-               c. Cross-reference the commit history and code diff (from step 1) against the acceptance criteria.
-               d. Compose and post a PR comment using the following curl command with this structure:
-                  curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
-                    -H "Content-Type: application/json" \
-                    -d '{"body": "<your composed comment>"}' \
-                    "https://api.github.com/repos/${{ github.repository }}/issues/${{ steps.ensure_pr.outputs.pr_number }}/comments"
-                  The comment should follow this structure:
-                  ---
-                  ## ✅ Tests Passed — Acceptance Criteria Review
-                  
-                  **Jira Ticket:** [<TICKET-ID>](<link to ticket>)
-                  
-                  ### Acceptance Criteria Assessment
-                  For each acceptance criterion from the ticket, list:
-                  - The criterion text
-                  - ✅ **Met** / ❌ **Not Met** / ⚠️ **Partially Met**
-                  - A brief explanation referencing specific commits or code changes
-                  
-                  ### Commit History
-                  List all commits on this branch.
-                  
-                  ### Summary
-                  An overall verdict: are all acceptance criteria fully met?
-                  ---
-               e. IMMEDIATELY STOP AND EXIT. Do nothing else.
+            You are given a diff and test failure annotations as files.
+            Your ONLY job: explain what failed and suggest a fix.
+
+            DIFF: Read the file at /tmp/diff.txt
+            ANNOTATIONS: Read the file at /tmp/annotations.txt
+
+            OUTPUT: Write your analysis to /tmp/failure_comment.txt in Markdown format.
+            Do nothing else — no API calls, no exploring files, no MCP tools. Just read, analyze, and write.
+
+      - name: Post failure comment
+        if: github.event.workflow_run.conclusion == 'failure'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          if [ -f /tmp/failure_comment.txt ]; then
+            BODY=$(cat /tmp/failure_comment.txt)
+          else
+            BODY="⚠️ Junie was unable to produce a failure diagnosis."
+          fi
+          jq -n --arg body "$BODY" '{"body": $body}' | \
+            curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d @- \
+              "https://api.github.com/repos/${{ github.repository }}/issues/${{ steps.ensure_pr.outputs.pr_number }}/comments"
+
+      # === SUCCESS PATH ===
+
+      - name: Fetch acceptance criteria
+        id: criteria
+        if: github.event.workflow_run.conclusion == 'success' && steps.jira_ticket.outputs.ticket != ''
+        env:
+          JIRA_URL: ${{ secrets.JIRA_URL }}
+          JIRA_USERNAME: ${{ secrets.JIRA_USERNAME }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        shell: bash
+        run: |
+          TICKET="${{ steps.jira_ticket.outputs.ticket }}"
+          curl -s -u "$JIRA_USERNAME:$JIRA_API_TOKEN" \
+            "$JIRA_URL/rest/api/2/issue/$TICKET?fields=description,summary" \
+            | jq -r '.fields.description // "No description found."' > /tmp/criteria.txt
+          echo "path=/tmp/criteria.txt" >> "$GITHUB_OUTPUT"
+
+      - name: Junie — Acceptance Criteria Review
+        if: github.event.workflow_run.conclusion == 'success' && steps.jira_ticket.outputs.ticket != ''
+        uses: JetBrains/junie-github-action@v0
+        with:
+          junie_api_key: ${{ secrets.JUNIE_API_KEY }}
+          silent_mode: "true"
+          prompt: |
+            You are given a diff, commit log, and acceptance criteria as files.
+            Your ONLY job: evaluate each acceptance criterion against the diff and write the result.
+
+            DIFF: Read the file at /tmp/diff.txt
+            COMMITS: Read the file at /tmp/commits.txt
+            ACCEPTANCE CRITERIA: Read the file at /tmp/criteria.txt
+
+            OUTPUT: Write your review to /tmp/review.txt in this exact Markdown format:
+
+            ## ✅ Tests Passed — Acceptance Criteria Review
+            **Jira Ticket:** [${{ steps.jira_ticket.outputs.ticket }}](${{ secrets.JIRA_URL }}/browse/${{ steps.jira_ticket.outputs.ticket }})
+            ### Acceptance Criteria Assessment
+            - Each criterion: ✅ Met / ❌ Not Met / ⚠️ Partially Met + one-line explanation
+            ### Commit History
+            (paste the commits)
+            ### Summary
+            Overall verdict.
+
+            Do nothing else — no API calls, no exploring files, no MCP tools. Just read, analyze, and write.
+
+      - name: Post review comment
+        if: github.event.workflow_run.conclusion == 'success' && steps.jira_ticket.outputs.ticket != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          if [ -f /tmp/review.txt ]; then
+            BODY=$(cat /tmp/review.txt)
+          else
+            BODY="⚠️ Junie was unable to produce an acceptance criteria review."
+          fi
+          jq -n --arg body "$BODY" '{"body": $body}' | \
+            curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d @- \
+              "https://api.github.com/repos/${{ github.repository }}/issues/${{ steps.ensure_pr.outputs.pr_number }}/comments"
+
+      - name: Post success comment (no Jira ticket)
+        if: github.event.workflow_run.conclusion == 'success' && steps.jira_ticket.outputs.ticket == ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          BODY="## ✅ Tests Passed\nNo Jira ticket found for this branch — skipping acceptance criteria review."
+          jq -n --arg body "$BODY" '{"body": $body}' | \
+            curl -s -X POST -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d @- \
+              "https://api.github.com/repos/${{ github.repository }}/issues/${{ steps.ensure_pr.outputs.pr_number }}/comments"
