@@ -28,7 +28,7 @@ const buildCategoryColorMap = (summary) => {
 };
 
 const ExpenseList = ({ expenses, isLoading, summary }) => {
-  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedCategories, setSelectedCategories] = useState(new Set());
   const [sortField, setSortField] = useState('date');
   const [sortOrder, setSortOrder] = useState('desc');
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
@@ -62,10 +62,12 @@ const ExpenseList = ({ expenses, isLoading, summary }) => {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [expenses]);
 
+  const isFilterActive = selectedCategories.size > 0 && selectedCategories.size < categories.length;
+
   const displayedExpenses = useMemo(() => {
     if (!expenses) return [];
-    let filtered = selectedCategory
-      ? expenses.filter((exp) => exp.category === selectedCategory)
+    let filtered = selectedCategories.size > 0 && selectedCategories.size < categories.length
+      ? expenses.filter((exp) => selectedCategories.has(exp.category))
       : [...expenses];
     filtered.sort((a, b) => {
       let cmp = 0;
@@ -79,7 +81,7 @@ const ExpenseList = ({ expenses, isLoading, summary }) => {
       return sortOrder === 'desc' ? -cmp : cmp;
     });
     return filtered;
-  }, [expenses, selectedCategory, sortField, sortOrder]);
+  }, [expenses, selectedCategories, categories.length, sortField, sortOrder]);
 
   const summaryTotal = useMemo(() => {
     return displayedExpenses.reduce((sum, exp) => sum + parseFloat(exp.amount), 0);
@@ -131,7 +133,7 @@ const ExpenseList = ({ expenses, isLoading, summary }) => {
         <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Expenses</h2>
         <span className="text-sm text-slate-500 dark:text-slate-400">
           {displayedExpenses.length} of {expenses.length} items
-          {selectedCategory && (
+          {isFilterActive && (
             <> &bull; <span className="font-medium text-slate-700 dark:text-slate-300">{formatCurrency(summaryTotal)}</span></>
           )}
         </span>
@@ -154,7 +156,7 @@ const ExpenseList = ({ expenses, isLoading, summary }) => {
                   onClick={() => setCategoryDropdownOpen((prev) => !prev)}
                 >
                   Category
-                  {selectedCategory ? (
+                  {isFilterActive ? (
                     <svg className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                     </svg>
@@ -168,30 +170,37 @@ const ExpenseList = ({ expenses, isLoading, summary }) => {
                   <div className="absolute left-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 min-w-[180px] z-20">
                     <button
                       onClick={() => {
-                        setSelectedCategory(null);
-                        setCategoryDropdownOpen(false);
+                        setSelectedCategories(new Set(categories.map((c) => c.name)));
                       }}
-                      className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-between ${
-                        !selectedCategory ? 'text-indigo-600 dark:text-indigo-400 font-medium' : 'text-slate-700 dark:text-slate-300'
-                      }`}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-slate-700 dark:text-slate-300"
                     >
-                      All Categories
-                      {!selectedCategory && (
-                        <svg className="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
+                      Select All
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedCategories(new Set());
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-slate-700 dark:text-slate-300"
+                    >
+                      Unselect All
                     </button>
                     <div className="border-t border-slate-100 dark:border-slate-700 my-1"></div>
                     {categories.map((cat) => (
                       <button
                         key={cat.name}
                         onClick={() => {
-                          setSelectedCategory(cat.name);
-                          setCategoryDropdownOpen(false);
+                          setSelectedCategories((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(cat.name)) {
+                              next.delete(cat.name);
+                            } else {
+                              next.add(cat.name);
+                            }
+                            return next;
+                          });
                         }}
                         className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center justify-between gap-3 ${
-                          selectedCategory === cat.name ? 'text-indigo-600 dark:text-indigo-400 font-medium' : 'text-slate-700 dark:text-slate-300'
+                          selectedCategories.has(cat.name) ? 'text-indigo-600 dark:text-indigo-400 font-medium' : 'text-slate-700 dark:text-slate-300'
                         }`}
                       >
                         <span className="flex items-center gap-2">
@@ -199,7 +208,7 @@ const ExpenseList = ({ expenses, isLoading, summary }) => {
                           {cat.name}
                           <span className="text-xs text-slate-400 dark:text-slate-500">({cat.count})</span>
                         </span>
-                        {selectedCategory === cat.name && (
+                        {selectedCategories.has(cat.name) && (
                           <svg className="w-4 h-4 text-indigo-600 dark:text-indigo-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                           </svg>
