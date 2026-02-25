@@ -11,17 +11,65 @@ jobs:
       github.event.pull_request.merged == true
       && startsWith(github.event.pull_request.head.ref, 'FT-')
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
-      contents: read
+      contents: write
       pull-requests: read
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Gather PR diff
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3.diff" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}" \
+            > /tmp/diff.txt
+          echo "Diff size: $(wc -l < /tmp/diff.txt) lines"
+
+      - name: Gather commit log
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/commits" \
+            | jq -r '.[] | "\(.sha[0:7]) \(.commit.message | split("\n")[0])"' > /tmp/commits.txt
+          echo "Commits:"
+          cat /tmp/commits.txt
+
+      - name: Junie — Summarize Changes
+        uses: JetBrains/junie-github-action@v0
+        with:
+          junie_api_key: ${{ secrets.JUNIE_API_KEY }}
+          silent_mode: "true"
+          prompt: |
+            You are given a code diff and commit log as files.
+            Your ONLY job: write a short, plain-language summary of what changed, suitable for a project manager (no technical jargon).
+
+            DIFF: Read the file at /tmp/diff.txt
+            COMMITS: Read the file at /tmp/commits.txt
+
+            OUTPUT: Write your summary to /tmp/summary.txt as plain text (no Markdown, no formatting).
+            Keep it to 2–4 sentences. Describe what was changed and why it matters from a product perspective.
+            Do nothing else — no API calls, no exploring files, no MCP tools. Just read, analyze, and write.
+
       - name: Post Jira comment
         env:
           JIRA_URL: ${{ secrets.JIRA_URL }}
           JIRA_USERNAME: ${{ secrets.JIRA_USERNAME }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           TICKET="${{ github.event.pull_request.head.ref }}"
@@ -29,9 +77,21 @@ jobs:
           PR_TITLE="${{ github.event.pull_request.title }}"
           REPO="${{ github.repository }}"
 
-          COMMENT="🚀 PR #${PR_NUM} merged: ${PR_TITLE}\n\nSee: https://github.com/${REPO}/pull/${PR_NUM}"
+          if [ -f /tmp/summary.txt ]; then
+            SUMMARY=$(cat /tmp/summary.txt)
+          else
+            SUMMARY="No summary available."
+          fi
 
-          jq -n --arg text "$COMMENT" \
+          {
+            echo "🚀 PR #${PR_NUM} merged: ${PR_TITLE}"
+            echo ""
+            echo "${SUMMARY}"
+            echo ""
+            echo "See: https://github.com/${REPO}/pull/${PR_NUM}"
+          } > /tmp/jira_comment.txt
+
+          jq -n --rawfile text /tmp/jira_comment.txt \
             '{"body":{"type":"doc","version":1,"content":[{"type":"paragraph","content":[{"type":"text","text":$text}]}]}}' | \
             curl -s -u "$JIRA_USERNAME:$JIRA_API_TOKEN" -X POST \
               -H "Content-Type: application/json" \
