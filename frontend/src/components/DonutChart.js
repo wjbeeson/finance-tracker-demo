@@ -27,7 +27,7 @@ const CustomTooltip = ({ active, payload, total }) => {
     const item = payload[0];
     const percentage = ((item.value / total) * 100).toFixed(1);
     return (
-      <div className="bg-white dark:bg-slate-800 px-4 py-3 shadow-lg rounded-lg border border-slate-200 dark:border-slate-700">
+      <div className="bg-white dark:bg-slate-900 px-4 py-3 shadow-lg rounded-lg border border-slate-200 dark:border-slate-800">
         <p className="font-medium text-slate-800 dark:text-slate-100">{item.name}</p>
         <p className="text-slate-600 dark:text-slate-300">{formatCurrency(item.value)}</p>
         <p className="text-sm text-slate-500 dark:text-slate-400">{percentage}% of total</p>
@@ -57,10 +57,10 @@ const renderLegend = (props) => {
 const DonutChart = ({ data, isLoading, inline }) => {
   const { theme } = useTheme();
   const total = data?.reduce((sum, item) => sum + parseFloat(item.total), 0) || 0;
-  const strokeColor = theme === 'dark' ? '#1e293b' : 'white';
+  const strokeColor = theme === 'dark' ? '#0f172a' : 'white';
 
   const Wrapper = inline ? React.Fragment : ({ children }) => (
-    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-colors">
+    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 transition-colors">
       {children}
     </div>
   );
@@ -81,7 +81,7 @@ const DonutChart = ({ data, isLoading, inline }) => {
       <Wrapper>
         <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Spending by Category</h2>
         <div className="h-80 flex flex-col items-center justify-center text-slate-500 dark:text-slate-400">
-          <svg className="w-16 h-16 mb-4 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-16 h-16 mb-4 text-slate-300 dark:text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
           </svg>

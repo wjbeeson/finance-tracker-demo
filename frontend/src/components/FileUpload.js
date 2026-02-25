@@ -67,7 +67,7 @@ const FileUpload = ({ onUploadSuccess }) => {
   };
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-colors">
+    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 transition-colors">
       <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Upload Expenses</h2>
       
       <div
@@ -79,8 +79,8 @@ const FileUpload = ({ onUploadSuccess }) => {
           border-2 border-dashed rounded-lg p-8 text-center cursor-pointer
           transition-all duration-200 ease-in-out
           ${isDragging 
-            ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30' 
-            : 'border-slate-300 dark:border-slate-600 hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+            ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/40' 
+            : 'border-slate-300 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-800/50'
           }
           ${isUploading ? 'opacity-50 pointer-events-none' : ''}
         `}
@@ -96,7 +96,7 @@ const FileUpload = ({ onUploadSuccess }) => {
         <div className="flex flex-col items-center gap-3">
           <div className={`
             w-12 h-12 rounded-full flex items-center justify-center
-            ${isDragging ? 'bg-indigo-100 dark:bg-indigo-900/50' : 'bg-slate-100 dark:bg-slate-700'}
+            ${isDragging ? 'bg-indigo-100 dark:bg-indigo-900/50' : 'bg-slate-100 dark:bg-slate-800'}
           `}>
             <svg 
               className={`w-6 h-6 ${isDragging ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400'}`}
@@ -135,8 +135,8 @@ const FileUpload = ({ onUploadSuccess }) => {
         <div className={`
           mt-4 p-3 rounded-lg text-sm
           ${uploadStatus.type === 'success' 
-            ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800' 
-            : 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800'
+            ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900' 
+            : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900'
           }
         `}>
           {uploadStatus.message}
