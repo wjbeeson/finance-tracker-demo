@@ -93,16 +93,6 @@ jobs:
           echo "path=/tmp/diff.txt" >> "$GITHUB_OUTPUT"
           echo "Diff size: $(wc -l < /tmp/diff.txt) lines"
 
-      - name: Gather commit log
-        id: commits
-        shell: bash
-        run: |
-          # Only include commits related to application changes (exclude @junie-agent noise)
-          git log origin/master..HEAD --pretty=format:"%h %s" > /tmp/commits.txt
-          echo "path=/tmp/commits.txt" >> "$GITHUB_OUTPUT"
-          echo "Commits:"
-          cat /tmp/commits.txt
-
       - name: Update PR description (procedural)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -210,15 +200,14 @@ jobs:
           junie_api_key: ${{ secrets.JUNIE_API_KEY }}
           silent_mode: "true"
           prompt: |
-            Read these 3 files, then write /tmp/review.txt. That is your ENTIRE job.
+            Read these 2 files, then write /tmp/review.txt. That is your ENTIRE job.
 
             FILES TO READ:
-            1. /tmp/diff.txt (code diff)
-            2. /tmp/commits.txt (commit log)
-            3. /tmp/criteria.txt (acceptance criteria)
+            1. /tmp/diff.txt (code diff — this is the ONLY source of truth for what changed)
+            2. /tmp/criteria.txt (acceptance criteria)
 
             INSTRUCTIONS:
-            - Read all 3 files with a single `cat /tmp/diff.txt /tmp/commits.txt /tmp/criteria.txt`
+            - Read both files with `cat /tmp/diff.txt /tmp/criteria.txt`
             - Do NOT run grep, sed, head, tail, or any other commands to explore the diff
             - Do NOT explore the repository or run any other tools
             - Immediately write /tmp/review.txt after reading
@@ -250,6 +239,7 @@ jobs:
             ---END TEMPLATE---
 
             RULES:
+            - ONLY describe changes visible in the diff. Do NOT infer or guess about changes not shown.
             - Every criterion from /tmp/criteria.txt MUST appear — do not skip any.
             - Use ✅ **MET:**, ❌ **NOT MET:**, or ⚠️ **PARTIAL:** exactly as shown.
             - One sentence per explanation.

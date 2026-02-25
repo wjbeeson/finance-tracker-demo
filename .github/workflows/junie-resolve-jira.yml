@@ -40,33 +40,25 @@ jobs:
           awk '/^diff --git/{skip=0} /^diff --git a\/.github\//{skip=1} /^diff --git a\/.output\.txt/{skip=1} !skip' /tmp/raw_diff.txt > /tmp/diff.txt
           echo "Diff size: $(wc -l < /tmp/diff.txt) lines (filtered from $(wc -l < /tmp/raw_diff.txt))"
 
-      - name: Gather commit log
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/commits" \
-            | jq -r '.[] | "\(.sha[0:7]) \(.commit.message | split("\n")[0])"' > /tmp/commits.txt
-          echo "Commits:"
-          cat /tmp/commits.txt
-
       - name: Junie — Summarize Changes
         uses: JetBrains/junie-github-action@v0
         with:
           junie_api_key: ${{ secrets.JUNIE_API_KEY }}
           silent_mode: "true"
           prompt: |
-            Read these 2 files, then write /tmp/summary.txt. That is your ENTIRE job.
+            Read /tmp/diff.txt, then write /tmp/summary.txt. That is your ENTIRE job.
 
-            FILES TO READ:
-            1. /tmp/diff.txt (code diff)
-            2. /tmp/commits.txt (commit log)
+            FILE TO READ:
+            - /tmp/diff.txt (code diff — this is the ONLY source of truth)
 
             INSTRUCTIONS:
-            - Read both files with `cat /tmp/diff.txt /tmp/commits.txt`
+            - Read the file with `cat /tmp/diff.txt`
             - Do NOT run grep, sed, head, tail, or any other exploration commands
             - Immediately write /tmp/summary.txt after reading
+
+            RULES:
+            - ONLY describe changes that are visible in the diff. Do NOT infer, guess, or add anything not shown in the diff.
+            - If the diff is empty, write: "No application code changes in this PR."
 
             OUTPUT: Write 2–4 sentences in plain text (no Markdown). Describe what changed and why it matters, in language a project manager can understand (no technical jargon).
             Do NOTHING else. No API calls, no grep, no file exploration. Just read → write.
