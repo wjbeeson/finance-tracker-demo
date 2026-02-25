@@ -31,4 +31,14 @@ export const getExpenseSummary = async () => {
   return response.data;
 };
 
+export const getExpenseTimeSeries = async (period = 'month') => {
+  const response = await api.get(`/expenses/timeseries?period=${period}`);
+  return response.data;
+};
+
+export const getAvailablePeriods = async () => {
+  const response = await api.get('/expenses/periods');
+  return response.data;
+};
+
 export default api;

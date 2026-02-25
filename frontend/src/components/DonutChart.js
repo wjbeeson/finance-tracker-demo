@@ -54,25 +54,31 @@ const renderLegend = (props) => {
   );
 };
 
-const DonutChart = ({ data, isLoading }) => {
+const DonutChart = ({ data, isLoading, inline }) => {
   const { theme } = useTheme();
   const total = data?.reduce((sum, item) => sum + parseFloat(item.total), 0) || 0;
   const strokeColor = theme === 'dark' ? '#1e293b' : 'white';
 
+  const Wrapper = inline ? React.Fragment : ({ children }) => (
+    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-colors">
+      {children}
+    </div>
+  );
+
   if (isLoading) {
     return (
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-colors">
+      <Wrapper>
         <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Spending by Category</h2>
         <div className="h-80 flex items-center justify-center">
           <div className="w-8 h-8 border-2 border-indigo-600 dark:border-indigo-400 border-t-transparent rounded-full animate-spin"></div>
         </div>
-      </div>
+      </Wrapper>
     );
   }
 
   if (!data || data.length === 0) {
     return (
-      <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-colors">
+      <Wrapper>
         <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Spending by Category</h2>
         <div className="h-80 flex flex-col items-center justify-center text-slate-500 dark:text-slate-400">
           <svg className="w-16 h-16 mb-4 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -82,7 +88,7 @@ const DonutChart = ({ data, isLoading }) => {
           <p>No expense data available</p>
           <p className="text-sm">Upload a CSV file to see your spending breakdown</p>
         </div>
-      </div>
+      </Wrapper>
     );
   }
 
@@ -92,7 +98,7 @@ const DonutChart = ({ data, isLoading }) => {
   }));
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-colors">
+    <Wrapper>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Spending by Category</h2>
         <div className="text-right">
@@ -127,7 +133,7 @@ const DonutChart = ({ data, isLoading }) => {
           </PieChart>
         </ResponsiveContainer>
       </div>
-    </div>
+    </Wrapper>
   );
 };
 

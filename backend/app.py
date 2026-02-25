@@ -4,7 +4,7 @@ import sqlite3
 import csv
 import io
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 CORS(app)
@@ -86,6 +86,102 @@ def get_summary():
     ''').fetchall()
     conn.close()
     return jsonify([{'category': row['category'], 'total': row['total']} for row in summary])
+
+@app.route('/api/expenses/timeseries', methods=['GET'])
+def get_timeseries():
+    period = request.args.get('period', 'month')
+    if period not in ('week', 'month', 'year'):
+        return jsonify({'error': 'Invalid period. Must be week, month, or year'}), 400
+
+    now = datetime.now()
+    conn = get_db()
+
+    if period == 'week':
+        start_of_week = now - timedelta(days=now.weekday())
+        start_date = start_of_week.strftime('%Y-%m-%d')
+        end_date = (start_of_week + timedelta(days=6)).strftime('%Y-%m-%d')
+        rows = conn.execute('''
+            SELECT date, SUM(amount) as total
+            FROM expenses
+            WHERE date >= ? AND date <= ?
+            GROUP BY date
+            ORDER BY date ASC
+        ''', (start_date, end_date)).fetchall()
+    elif period == 'month':
+        start_date = now.strftime('%Y-%m-01')
+        if now.month == 12:
+            end_date = f'{now.year + 1}-01-01'
+        else:
+            end_date = f'{now.year}-{now.month + 1:02d}-01'
+        rows = conn.execute('''
+            SELECT date, SUM(amount) as total
+            FROM expenses
+            WHERE date >= ? AND date < ?
+            GROUP BY date
+            ORDER BY date ASC
+        ''', (start_date, end_date)).fetchall()
+    else:  # year
+        start_date = f'{now.year}-01-01'
+        end_date = f'{now.year + 1}-01-01'
+        rows = conn.execute('''
+            SELECT substr(date, 1, 7) as month, SUM(amount) as total
+            FROM expenses
+            WHERE date >= ? AND date < ?
+            GROUP BY substr(date, 1, 7)
+            ORDER BY month ASC
+        ''', (start_date, end_date)).fetchall()
+
+    conn.close()
+
+    if period == 'year':
+        result = [{'date': row['month'], 'total': row['total']} for row in rows]
+    else:
+        result = [{'date': row['date'], 'total': row['total']} for row in rows]
+
+    return jsonify(result)
+
+
+@app.route('/api/expenses/periods', methods=['GET'])
+def get_available_periods():
+    now = datetime.now()
+    conn = get_db()
+
+    # Check week
+    start_of_week = now - timedelta(days=now.weekday())
+    week_start = start_of_week.strftime('%Y-%m-%d')
+    week_end = (start_of_week + timedelta(days=6)).strftime('%Y-%m-%d')
+    week_count = conn.execute(
+        'SELECT COUNT(*) as cnt FROM expenses WHERE date >= ? AND date <= ?',
+        (week_start, week_end)
+    ).fetchone()['cnt']
+
+    # Check month
+    month_start = now.strftime('%Y-%m-01')
+    if now.month == 12:
+        month_end = f'{now.year + 1}-01-01'
+    else:
+        month_end = f'{now.year}-{now.month + 1:02d}-01'
+    month_count = conn.execute(
+        'SELECT COUNT(*) as cnt FROM expenses WHERE date >= ? AND date < ?',
+        (month_start, month_end)
+    ).fetchone()['cnt']
+
+    # Check year
+    year_start = f'{now.year}-01-01'
+    year_end = f'{now.year + 1}-01-01'
+    year_count = conn.execute(
+        'SELECT COUNT(*) as cnt FROM expenses WHERE date >= ? AND date < ?',
+        (year_start, year_end)
+    ).fetchone()['cnt']
+
+    conn.close()
+
+    return jsonify({
+        'week': week_count > 0,
+        'month': month_count > 0,
+        'year': year_count > 0
+    })
+
 
 if __name__ == '__main__':
     init_db()

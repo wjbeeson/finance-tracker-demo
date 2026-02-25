@@ -1,9 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getAllExpenses, getExpenseSummary } from '../services/expenseApi';
+import { getAllExpenses, getExpenseSummary, getExpenseTimeSeries, getAvailablePeriods } from '../services/expenseApi';
 import { useTheme } from '../context/ThemeContext';
 import FileUpload from './FileUpload';
 import DonutChart from './DonutChart';
+import TimeSeriesChart from './TimeSeriesChart';
 import ExpenseList from './ExpenseList';
+
+const GRAPH_TYPES = [
+  { id: 'donut', label: 'Pie Chart' },
+  { id: 'timeseries', label: 'Time Series' },
+];
+
+const PERIOD_OPTIONS = [
+  { id: 'week', label: 'Week' },
+  { id: 'month', label: 'Month' },
+  { id: 'year', label: 'Year' },
+];
 
 const Dashboard = () => {
   const [expenses, setExpenses] = useState([]);
@@ -12,17 +24,26 @@ const Dashboard = () => {
   const [error, setError] = useState(null);
   const { theme, toggleTheme } = useTheme();
 
+  const [graphType, setGraphType] = useState('donut');
+  const [showGraphMenu, setShowGraphMenu] = useState(false);
+  const [selectedPeriod, setSelectedPeriod] = useState('month');
+  const [timeSeriesData, setTimeSeriesData] = useState([]);
+  const [isTimeSeriesLoading, setIsTimeSeriesLoading] = useState(false);
+  const [availablePeriods, setAvailablePeriods] = useState({ week: false, month: false, year: false });
+
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     
     try {
-      const [expensesData, summaryData] = await Promise.all([
+      const [expensesData, summaryData, periodsData] = await Promise.all([
         getAllExpenses(),
         getExpenseSummary(),
+        getAvailablePeriods(),
       ]);
       setExpenses(expensesData);
       setSummary(summaryData);
+      setAvailablePeriods(periodsData);
     } catch (err) {
       console.error('Error fetching data:', err);
       setError('Failed to load expense data. Please make sure the backend is running.');
@@ -31,12 +52,39 @@ const Dashboard = () => {
     }
   }, []);
 
+  const fetchTimeSeries = useCallback(async (period) => {
+    setIsTimeSeriesLoading(true);
+    try {
+      const data = await getExpenseTimeSeries(period);
+      setTimeSeriesData(data);
+    } catch (err) {
+      console.error('Error fetching time series:', err);
+      setTimeSeriesData([]);
+    } finally {
+      setIsTimeSeriesLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    if (graphType === 'timeseries') {
+      fetchTimeSeries(selectedPeriod);
+    }
+  }, [graphType, selectedPeriod, fetchTimeSeries]);
+
   const handleUploadSuccess = () => {
     fetchData();
+    if (graphType === 'timeseries') {
+      fetchTimeSeries(selectedPeriod);
+    }
+  };
+
+  const handleGraphTypeSelect = (type) => {
+    setGraphType(type);
+    setShowGraphMenu(false);
   };
 
   return (
@@ -107,7 +155,90 @@ const Dashboard = () => {
 
           {/* Right Column - Chart & List */}
           <div className="lg:col-span-2 space-y-6">
-            <DonutChart data={summary} isLoading={isLoading} />
+            {/* Chart Container */}
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 transition-colors">
+              {/* Graph Controls */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  {/* Graph Type Dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowGraphMenu(!showGraphMenu)}
+                      className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
+                      aria-label="Select graph type"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                      </svg>
+                      Graph
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {showGraphMenu && (
+                      <div className="absolute top-full left-0 mt-1 w-44 bg-white dark:bg-slate-700 rounded-lg shadow-lg border border-slate-200 dark:border-slate-600 py-1 z-10">
+                        {GRAPH_TYPES.map((type) => (
+                          <button
+                            key={type.id}
+                            onClick={() => handleGraphTypeSelect(type.id)}
+                            className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                              graphType === type.id
+                                ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium'
+                                : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-600'
+                            }`}
+                          >
+                            {type.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Period Selector - only visible for time series */}
+                  {graphType === 'timeseries' && (
+                    <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-700 rounded-lg p-1">
+                      {PERIOD_OPTIONS.map((option) => {
+                        const isAvailable = availablePeriods[option.id];
+                        const isSelected = selectedPeriod === option.id;
+                        return (
+                          <div key={option.id} className="relative group">
+                            <button
+                              onClick={() => isAvailable && setSelectedPeriod(option.id)}
+                              disabled={!isAvailable}
+                              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                                isSelected && isAvailable
+                                  ? 'bg-white dark:bg-slate-600 text-indigo-700 dark:text-indigo-300 shadow-sm'
+                                  : isAvailable
+                                    ? 'text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100'
+                                    : 'text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                              }`}
+                              aria-label={`Select ${option.label} period`}
+                            >
+                              {option.label}
+                            </button>
+                            {!isAvailable && (
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-800 dark:bg-slate-600 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                No data available for this period
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800 dark:border-t-slate-600"></div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Chart Content */}
+              {graphType === 'donut' ? (
+                <DonutChart data={summary} isLoading={isLoading} inline />
+              ) : (
+                <TimeSeriesChart data={timeSeriesData} isLoading={isTimeSeriesLoading} period={selectedPeriod} />
+              )}
+            </div>
+
             <ExpenseList expenses={expenses} isLoading={isLoading} summary={summary} />
           </div>
         </div>
