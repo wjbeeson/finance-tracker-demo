@@ -71,7 +71,7 @@ class TestGetExpenses:
         """Each expense has the expected fields."""
         resp = seeded_client.get("/api/expenses")
         expense = resp.get_json()[0]
-        assert set(expense.keys()) == {"id", "description", "amount", "date", "category"}
+        assert set(expense.keys()) == {"id", "description", "amount", "date", "category", "excluded"}
 
     def test_expense_data_types(self, seeded_client):
         """Field values have the correct types."""

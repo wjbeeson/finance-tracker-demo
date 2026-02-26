@@ -27,20 +27,25 @@ const buildCategoryColorMap = (summary) => {
   return colorMap;
 };
 
-const ExpenseList = ({ expenses, isLoading, summary }) => {
+const ExpenseList = ({ expenses, isLoading, summary, onDeleteExpense, onToggleExcluded }) => {
   const [selectedCategories, setSelectedCategories] = useState(new Set());
   const [sortField, setSortField] = useState('date');
   const [sortOrder, setSortOrder] = useState('desc');
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState(null);
   const dropdownRef = useRef(null);
+  const actionMenuRef = useRef(null);
 
   const categoryColorMap = useMemo(() => buildCategoryColorMap(summary), [summary]);
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setCategoryDropdownOpen(false);
+      }
+      if (actionMenuRef.current && !actionMenuRef.current.contains(event.target)) {
+        setOpenMenuId(null);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -230,13 +235,14 @@ const ExpenseList = ({ expenses, isLoading, summary }) => {
               >
                 Amount{getSortArrow('amount')}
               </th>
+              <th className="w-10 py-3 px-2"></th>
             </tr>
           </thead>
           <tbody>
             {displayedExpenses.map((expense) => (
-              <tr key={expense.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+              <tr key={expense.id} className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${expense.excluded ? 'opacity-50' : ''}`}>
                 <td className="py-3 px-2">
-                  <span className="text-slate-800 dark:text-slate-100 font-medium">{expense.description}</span>
+                  <span className={`text-slate-800 dark:text-slate-100 font-medium ${expense.excluded ? 'line-through' : ''}`}>{expense.description}</span>
                 </td>
                 <td className="py-3 px-2">
                   <span
@@ -255,7 +261,45 @@ const ExpenseList = ({ expenses, isLoading, summary }) => {
                   {formatDate(expense.date)}
                 </td>
                 <td className="py-3 px-2 text-right">
-                  <span className="text-slate-800 dark:text-slate-100 font-semibold">{formatCurrency(expense.amount)}</span>
+                  <span className={`text-slate-800 dark:text-slate-100 font-semibold ${expense.excluded ? 'line-through' : ''}`}>{formatCurrency(expense.amount)}</span>
+                </td>
+                <td className="py-3 px-2 text-right relative" ref={openMenuId === expense.id ? actionMenuRef : null}>
+                  <button
+                    onClick={() => setOpenMenuId(openMenuId === expense.id ? null : expense.id)}
+                    className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                    </svg>
+                  </button>
+                  {openMenuId === expense.id && (
+                    <div className="absolute right-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg py-1 z-30 min-w-[200px]">
+                      <button
+                        onClick={() => { onToggleExcluded(expense.id, !expense.excluded); setOpenMenuId(null); }}
+                        className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2"
+                      >
+                        {expense.excluded ? (
+                          <>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            Include in calculations
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
+                            Exclude from calculations
+                          </>
+                        )}
+                      </button>
+                      <div className="border-t border-slate-100 dark:border-slate-700 my-1"></div>
+                      <button
+                        onClick={() => { onDeleteExpense(expense.id); setOpenMenuId(null); }}
+                        className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        Delete
+                      </button>
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
