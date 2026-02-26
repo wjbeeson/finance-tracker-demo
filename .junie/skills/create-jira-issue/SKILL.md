@@ -1,3 +1,8 @@
+---
+name: create-jira-issue
+description: "Guides the user through creating a new Jira issue in the FT project with required acceptance criteria, then confirms before submitting."
+---
+
 # Create Jira Issue Skill
 
 ## Rules for Creating New Jira Issues

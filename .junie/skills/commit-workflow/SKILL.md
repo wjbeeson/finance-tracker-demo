@@ -1,3 +1,8 @@
+---
+name: commit-workflow
+description: "Handles the full commit workflow: creates a branch named after the Jira ticket, commits with a standardized message, pushes, and transitions the ticket to In Progress."
+---
+
 # Commit Workflow Skill
 
 ## Rules for ALL Commits

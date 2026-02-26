@@ -28,11 +28,8 @@
   <rect width="512" height="512" rx="96" ry="96" fill="url(#bg)"/>
   <!-- Subtle inner glow overlay for depth -->
   <rect width="512" height="512" rx="96" ry="96" fill="url(#sparkle)" opacity="0.15"/>
-  <!-- Stylized "A" letter with warm gradient -->
-  <path d="M256 100 L370 400 L330 400 L300 320 L212 320 L182 400 L142 400 Z M256 180 L224 296 L288 296 Z" fill="url(#letterGrad)"/>
-  <!-- Small dollar sign accent inside the A -->
-  <line x1="256" y1="230" x2="256" y2="290" stroke="url(#dollarGrad)" stroke-width="4" opacity="0.7"/>
-  <path d="M242 248 Q242 240 256 240 Q270 240 270 248 Q270 256 256 256 Q242 256 242 264 Q242 272 256 272 Q270 272 270 264" fill="none" stroke="url(#dollarGrad)" stroke-width="3.5" opacity="0.7"/>
+  <!-- Stylized "AE" letters with warm gradient -->
+  <text x="256" y="310" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="240" font-weight="bold" fill="url(#letterGrad)" letter-spacing="-10">AE</text>
   <!-- Decorative sparkle dots for extra color pop -->
   <circle cx="120" cy="120" r="8" fill="white" opacity="0.5"/>
   <circle cx="400" cy="140" r="5" fill="#ca8a04" opacity="0.6"/>
