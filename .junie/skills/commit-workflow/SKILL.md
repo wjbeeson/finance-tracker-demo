@@ -1,4 +1,14 @@
+---
+name: commit-workflow
+description: "Handles the full commit workflow: creates a branch named after the Jira ticket, commits with a standardized message, pushes, and transitions the ticket to In Progress."
+---
+
 # Commit Workflow Skill
+
+## IMPORTANT: Commit Only When Explicitly Asked
+- Do NOT automatically commit, push, or run the commit workflow unless the user explicitly asks you to commit.
+- Making code changes does NOT imply committing them. Only perform the commit workflow below when the user specifically requests a commit (e.g., "commit this", "push the changes", "run the commit workflow").
+- If you are unsure whether the user wants a commit, ASK before proceeding.
 
 ## Rules for ALL Commits
 
@@ -45,7 +55,7 @@ Before making any commits, follow this workflow:
 - This MUST happen automatically as part of every commit workflow — do not wait for the user to request it.
 
 ### 6. Commit Flow Summary
-For every task:
+When the user explicitly asks you to commit:
 1. Identify or request the Jira ticket number
 2. Fetch from origin and check if a branch named exactly `<TICKET-ID>` exists remotely
 3. Pull the remote branch OR create a new local branch with that name

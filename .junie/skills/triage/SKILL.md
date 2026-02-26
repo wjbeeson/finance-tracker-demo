@@ -1,3 +1,8 @@
+---
+name: triage
+description: "Activates on /triage. Greets the user and fetches their top 5 open Jira issues by priority from the FT project."
+---
+
 # Triage Skill
 
 ## Trigger

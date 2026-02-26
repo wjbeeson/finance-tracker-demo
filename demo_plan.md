@@ -1,4 +1,4 @@
-
+﻿
 # Junie AI Agent — Full Demo Plan
 
 ---
@@ -8,12 +8,13 @@
 Visual: The presentation title. Below it, a simple graphic of "Alex," an Acme Corp Developer. Show the high-level presentation outline. No bullet points on screen — the scene is painted verbally.
 
 Speaker Notes:
-- Open with a vivid scene, not a feature list. Paint the chaos of Alex's morning to create immediate empathy.
-- Pause after the scene to let the room react — developers will recognize themselves.
-- State the single goal: Alex will fix a bug, push a PR, and close a Jira ticket without ever leaving his IDE.
-- Set the context-switch challenge: ask the audience to mentally count every tool Alex would normally need.
+- Open with 2-3 quick, real stats about AI adoption among developers. Don't linger — these are table stakes, not the point.
+- Pivot: acknowledge the audience already knows this. Reframe the session as something they haven't seen — a live, end-to-end walkthrough through a single developer's real workflow.
+- Introduce Alex. Name, role, stack, one line. He's the lens, not a character study.
+- State the demo goal plainly: one bug, one window, triage to merge.
+- Let the slide visual do the heavy lifting — Alex's profile, the presentation outline. You're just bridging into the demo.
 
-Example Script: "It's 9:47 AM. Alex has IntelliJ IDEA open, Jira in two browser tabs, Slack pinging him about a standup he forgot, a terminal running a failing test he hasn't looked at yet, and a PR review he promised he'd finish yesterday. His coffee is cold. Sound familiar? (Pause.) By the end of this demo, Alex is going to fix a bug, push a PR, and close a Jira ticket — all before lunch, all without leaving his IDE. As we go, I want you to count something in your head: every time Alex would normally alt-tab to a different tool. At the end, we'll see what that number looks like. Let's get started."
+Example Script: "Over 75% of developers are already using AI in their workflow. The productivity numbers are everywhere — faster code generation, fewer context switches, shorter cycle times. But you all already know the stats. So today, instead of talking about what AI can do, I want to walk you through what it actually looks like — end to end, live, through the eyes of a real developer. This is Alex. Backend engineer at Acme Corp — Python, Flask, Redis. He's got a bug in his queue this morning. By the end of this session, that bug will be triaged, fixed, reviewed, merged, and closed in Jira — and Alex won't leave his IDE once. Let's get him set up."
 
 ---
 
@@ -22,12 +23,12 @@ Example Script: "It's 9:47 AM. Alex has IntelliJ IDEA open, Jira in two browser 
 Visual: A graphic of a "Blocked" sign or a lock, representing Acme Corp's strict Security Lead.
 
 Speaker Notes:
+- Keep this inside Alex's story. The Security Lead is a character blocking Alex, not a prompt for audience participation.
 - Acknowledge the immediate hurdle before any tooling: the Security Lead.
 - Highlight the concern: codebase leaks, compliance risks, AI training on proprietary data.
-- Pivot: solve this immediately so developers can actually code.
-- Audience engagement: ask a direct question to break the one-directional pattern early and gather intel on what the room cares about.
+- Pivot: solve this immediately so Alex can actually code. The audience will recognize the scenario without being asked to raise their hands.
 
-Example Script: "Before Alex can even think about using AI, Acme Corp's Security Lead steps in. They're concerned about proprietary codebase data leaking to a third-party model. It's a massive compliance risk. Quick question for the room — how many of you have had a security team block an AI tool before it even got to a proof of concept? (React to responses.) That's exactly the conversation we're going to solve right now, so the security team can relax and Alex can actually get to work."
+Example Script: "Alex wants to get started, but he can't. Before he's allowed to use any AI tooling, Acme Corp's Security Lead has shut it down. The concern is straightforward: proprietary codebase data leaking to a third-party model, compliance risks, code being used to train someone else's AI. Until that's resolved, Alex isn't touching anything. So let's resolve it."
 
 ---
 
@@ -191,19 +192,33 @@ Demo Actions:
 
 ---
 
-## Slide 11: STRATEGY: Skills, Scope, and Overrides [INFO — INTERMISSION 1]
+## Slide 11: STRATEGY: Skills vs. Guidelines [INFO — INTERMISSION 1]
 
-Visual: A diagram showing Global vs. Local Scopes (Guidelines, .junie files, MCP servers).
+Visual: Simple two-column layout. Left: "Skills" labeled "Conditional" with an on-demand icon. 
+Right: "Guidelines" labeled "Unconditional" with an always-on icon. Below, show the /triage 
+skill file and the guidelines.md file side by side from Alex's project.
 
 Speaker Notes:
-- Explain the /triage skill as targeted context, preventing unrelated triggers.
-- Explain Global vs. Local scope.
-- Local .junie files override global settings.
-- Local MCPs (Jira/Git) vs. Global MCPs (Unix file explorer).
-- Close the security loop: Action Allowlist gives admins granular control over permitted terminal commands.
-- Reference: [4] — Junie's Action Allowlist (Settings | Tools | Junie | Action Allowlist) lets admins granularly control which terminal commands Junie can execute without confirmation, including RegEx pattern matching. Individual permissions for Terminal commands, file operations, and other actions.
+- Transition naturally: Junie is working on its plan, so use the moment to dig 
+  deeper into the /triage skill that was just executed.
+- Frame the two configuration methods: conditional (Skills) and unconditional (Guidelines).
+- Skills = conditional instructions. "When the user asks for this, do this." The 
+  /triage skill is simply a prompt: when the user types /triage, pull Jira issues 
+  ordered by priority and give a custom greeting.
+- Guidelines = unconditional instructions, automatically appended to every request. 
+  Alex's guidelines file has two rules: never recurse into node modules, and only 
+  work in the FT Jira space. These are included every time, no matter what.
+- Address the natural question: how do you decide which is which? Any guideline 
+  could technically be repackaged as a skill — the boundary is blurry.
+- General principle: prefer Skills when possible, because they minimize context 
+  buffer usage which leads to better performance.
+- Explain why the recurse rule stays in Guidelines despite this: if Junie recurses 
+  into node modules even once, it tries to read tens of thousands of files and hangs 
+  for several minutes. That happening even once is catastrophic for productivity, 
+  so it stays in guidelines where it's always enforced.
+- Tease next slide: scope of execution.
 
-Example Script: "While Junie drafts that plan, let's talk about configuration scope. You saw Alex trigger a /triage skill. That skill only runs when Alex explicitly invokes it. Separating context into skills ensures that unrelated requests don't accidentally trigger irrelevant behavior when Alex is trying to focus. Furthermore, these rules can be global or local. Alex can override global settings by placing a local .junie file in his repository. He can do the same with tools. Alex has a global Unix MCP server for general file exploration across his machine, but the Jira and Git servers are securely locked only to this specific repository scope. This means different projects can have completely different AI configurations — and that's exactly how an enterprise should manage it. And one more thing for the Security Lead from this morning: Junie has an Action Allowlist in the settings. Alex's admin can granularly control which terminal commands Junie is permitted to run — even down to RegEx patterns. Auto Mode doesn't mean uncontrolled access."
+Example Script: "Let's leave Junie to work for a moment. While it's making its plan, I want to dig a little deeper into the skill I just executed. You can append custom instructions to your prompt in two ways with Junie — conditionally, and unconditionally. Conditional instructions are called Skills. When the user asks for this, do this. My /triage skill was very simply a prompt that said 'when the user types /triage, pull down all Jira issues and order them by priority, and give a custom greeting.' Unconditional instructions are called Guidelines, which are automatically appended to every request. My guidelines file right now only has two rules: never recurse into node modules, and only work in the FT space in Jira. These are appended to every request I send Junie, automatically. So how do you know what should be a Skill and what should be in Guidelines? After all, any guideline could technically be repackaged as a skill — which would accomplish functionally the same thing. In general, it's better to use Skills for what you can, because it minimizes context buffer usage, which leads to better performance. The reason I chose to keep the recurse rule in Guidelines is to ensure it never happens. If it does, Junie will try to read all of the tens of thousands of files inside of node modules and will hang for several minutes. That happening even once is catastrophic for productivity — so it stays in guidelines."
 
 ---
 
