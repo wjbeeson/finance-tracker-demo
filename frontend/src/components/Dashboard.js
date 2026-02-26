@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { getAllExpenses, getExpenseSummary, getExpenseTimeSeries, getPeriodLabel } from '../services/expenseApi';
+import { getAllExpenses, getExpenseSummary, getExpenseTimeSeries, getPeriodLabel, deleteExpense, toggleExpenseExcluded } from '../services/expenseApi';
 import { useTheme } from '../context/ThemeContext';
 import FileUpload from './FileUpload';
 import DonutChart from './DonutChart';
@@ -86,6 +86,18 @@ const Dashboard = () => {
     }
   };
 
+  const handleDeleteExpense = async (id) => {
+    await deleteExpense(id);
+    fetchData();
+    if (graphType === 'timeseries') fetchTimeSeries(selectedPeriod, periodOffset);
+  };
+
+  const handleToggleExcluded = async (id, excluded) => {
+    await toggleExpenseExcluded(id, excluded ? 1 : 0);
+    fetchData();
+    if (graphType === 'timeseries') fetchTimeSeries(selectedPeriod, periodOffset);
+  };
+
   const handleGraphTypeSelect = (type) => {
     setGraphType(type);
     setShowGraphMenu(false);
@@ -152,7 +164,7 @@ const Dashboard = () => {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-slate-600 dark:text-slate-300">Total Expenses</span>
-                  <span className="text-2xl font-bold text-slate-800 dark:text-slate-100">{expenses.length}</span>
+                  <span className="text-2xl font-bold text-slate-800 dark:text-slate-100">{expenses.filter(e => !e.excluded).length}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-600 dark:text-slate-300">Categories</span>
@@ -277,7 +289,7 @@ const Dashboard = () => {
               )}
             </div>
 
-            <ExpenseList expenses={expenses} isLoading={isLoading} summary={summary} />
+            <ExpenseList expenses={expenses} isLoading={isLoading} summary={summary} onDeleteExpense={handleDeleteExpense} onToggleExcluded={handleToggleExcluded} />
           </div>
         </div>
       </main>

@@ -46,9 +46,15 @@ def init_db():
             description TEXT NOT NULL,
             amount REAL NOT NULL,
             date TEXT NOT NULL,
-            category TEXT NOT NULL
+            category TEXT NOT NULL,
+            excluded INTEGER NOT NULL DEFAULT 0
         )
     ''')
+    # Migration: add excluded column to existing databases
+    try:
+        conn.execute('ALTER TABLE expenses ADD COLUMN excluded INTEGER NOT NULL DEFAULT 0')
+    except Exception:
+        pass  # Column already exists
     conn.commit()
     conn.close()
 
@@ -108,12 +114,32 @@ def upload_csv():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/expenses/<int:expense_id>', methods=['DELETE'])
+def delete_expense(expense_id):
+    conn = get_db()
+    conn.execute('DELETE FROM expenses WHERE id = ?', (expense_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Expense deleted'}), 200
+
+
+@app.route('/api/expenses/<int:expense_id>', methods=['PATCH'])
+def update_expense(expense_id):
+    data = request.get_json()
+    conn = get_db()
+    conn.execute('UPDATE expenses SET excluded = ? WHERE id = ?', (data.get('excluded', 0), expense_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Expense updated'}), 200
+
+
 @app.route('/api/expenses/summary', methods=['GET'])
 def get_summary():
     conn = get_db()
     summary = conn.execute('''
         SELECT category, SUM(amount) as total
         FROM expenses
+        WHERE excluded = 0
         GROUP BY category
         ORDER BY total DESC
     ''').fetchall()
@@ -176,7 +202,7 @@ def get_timeseries():
         rows = conn.execute('''
             SELECT substr(date, 1, 7) as month, SUM(amount) as total
             FROM expenses
-            WHERE date >= ? AND date < ?
+            WHERE date >= ? AND date < ? AND excluded = 0
             GROUP BY substr(date, 1, 7)
             ORDER BY month ASC
         ''', (start_date, end_date)).fetchall()
@@ -184,7 +210,7 @@ def get_timeseries():
         rows = conn.execute('''
             SELECT date, SUM(amount) as total
             FROM expenses
-            WHERE date >= ? AND date <= ?
+            WHERE date >= ? AND date <= ? AND excluded = 0
             GROUP BY date
             ORDER BY date ASC
         ''', (start_date, end_date)).fetchall()
@@ -192,7 +218,7 @@ def get_timeseries():
         rows = conn.execute('''
             SELECT date, SUM(amount) as total
             FROM expenses
-            WHERE date >= ? AND date < ?
+            WHERE date >= ? AND date < ? AND excluded = 0
             GROUP BY date
             ORDER BY date ASC
         ''', (start_date, end_date)).fetchall()
@@ -211,6 +237,23 @@ def get_timeseries():
 
 @app.route('/api/expenses/periods', methods=['GET'])
 def get_available_periods():
+    """
+    Fetches the available expense periods which contain at least one expense record.
+
+    The endpoint checks for the specified time periods (week, month, year) and determines
+    whether there are any recorded expenses for each period. It uses an optional 'offset'
+    parameter to adjust the range of the queried periods.
+
+    :param offset: Integer offset for adjusting the queried periods; defaults to 0.
+    :type offset: int
+
+    :raises ValueError: If an invalid value is provided for the 'offset' parameter.
+    :raises TypeError: If an incompatible type is provided for the 'offset' parameter.
+
+    :return: A JSON object indicating whether there are recorded expenses for each period
+             (week, month, year). Each period will map to a boolean value.
+    :rtype: flask.Response
+    """
     try:
         offset = int(request.args.get('offset', 0))
     except (ValueError, TypeError):
