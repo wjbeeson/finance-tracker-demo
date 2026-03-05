@@ -33,6 +33,7 @@ const ExpenseList = ({ expenses, isLoading, summary, onDeleteExpense, onToggleEx
   const [sortOrder, setSortOrder] = useState('desc');
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const [openMenuId, setOpenMenuId] = useState(null);
+  const [expensePendingDelete, setExpensePendingDelete] = useState(null);
   const dropdownRef = useRef(null);
   const actionMenuRef = useRef(null);
 
@@ -292,7 +293,7 @@ const ExpenseList = ({ expenses, isLoading, summary, onDeleteExpense, onToggleEx
                       </button>
                       <div className="border-t border-slate-100 dark:border-slate-700 my-1"></div>
                       <button
-                        onClick={() => { onDeleteExpense(expense.id); setOpenMenuId(null); }}
+                        onClick={() => { setExpensePendingDelete(expense); setOpenMenuId(null); }}
                         className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -306,6 +307,32 @@ const ExpenseList = ({ expenses, isLoading, summary, onDeleteExpense, onToggleEx
           </tbody>
         </table>
       </div>
+
+      {/* Confirmation modal */}
+      {expensePendingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-2">Delete Expense?</h3>
+            <p className="text-slate-600 dark:text-slate-300 text-sm mb-6">
+              Are you sure you want to delete this expense? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setExpensePendingDelete(null)}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { onDeleteExpense(expensePendingDelete.id); setExpensePendingDelete(null); }}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
