@@ -24,10 +24,10 @@
       <stop offset="100%" style="stop-color:#ffffff; stop-opacity:0"/>
     </radialGradient>
   </defs>
-  <!-- Rounded square background with multi-color gradient -->
-  <rect width="512" height="512" rx="96" ry="96" fill="url(#bg)"/>
+  <!-- Circular background with multi-color gradient -->
+  <circle cx="256" cy="256" r="256" fill="url(#bg)"/>
   <!-- Subtle inner glow overlay for depth -->
-  <rect width="512" height="512" rx="96" ry="96" fill="url(#sparkle)" opacity="0.15"/>
+  <circle cx="256" cy="256" r="256" fill="url(#sparkle)" opacity="0.15"/>
   <!-- Stylized "AE" letters with warm gradient -->
   <text x="256" y="310" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="240" font-weight="bold" fill="url(#letterGrad)" letter-spacing="-10">AE</text>
   <!-- Decorative sparkle dots for extra color pop -->
