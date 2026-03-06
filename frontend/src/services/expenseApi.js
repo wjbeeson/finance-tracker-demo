@@ -31,4 +31,29 @@ export const getExpenseSummary = async () => {
   return response.data;
 };
 
+export const deleteExpense = async (id) => {
+  const response = await api.delete(`/expenses/${id}`);
+  return response.data;
+};
+
+export const toggleExpenseExcluded = async (id, excluded) => {
+  const response = await api.patch(`/expenses/${id}`, { excluded });
+  return response.data;
+};
+
+export const getExpenseTimeSeries = async (period = 'month', offset = 0) => {
+  const response = await api.get(`/expenses/timeseries?period=${period}&offset=${offset}`);
+  return response.data;
+};
+
+export const getAvailablePeriods = async (offset = 0) => {
+  const response = await api.get(`/expenses/periods?offset=${offset}`);
+  return response.data;
+};
+
+export const getPeriodLabel = async (period = 'month', offset = 0) => {
+  const response = await api.get(`/expenses/period-label?period=${period}&offset=${offset}`);
+  return response.data.label;
+};
+
 export default api;

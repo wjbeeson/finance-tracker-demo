@@ -1,0 +1,122 @@
+name: Junie Jira Wrap-up
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  resolve-jira-ticket:
+    # Only run if merged AND branch is a Jira ticket (FT-*)
+    if: >-
+      github.event.pull_request.merged == true
+      && startsWith(github.event.pull_request.head.ref, 'FT-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Gather PR diff
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          # Get full diff, then strip .github/ and .output.txt sections so Junie only sees app code
+          curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3.diff" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}" \
+            > /tmp/raw_diff.txt
+          # Filter out non-application files
+          awk '/^diff --git/{skip=0} /^diff --git a\/.github\//{skip=1} /^diff --git a\/.output\.txt/{skip=1} !skip' /tmp/raw_diff.txt > /tmp/diff.txt
+          echo "Diff size: $(wc -l < /tmp/diff.txt) lines (filtered from $(wc -l < /tmp/raw_diff.txt))"
+
+      - name: Junie — Summarize Changes
+        uses: JetBrains/junie-github-action@v0
+        with:
+          junie_api_key: ${{ secrets.JUNIE_API_KEY }}
+          silent_mode: "true"
+          prompt: |
+            Read /tmp/diff.txt, then write /tmp/summary.txt. That is your ENTIRE job.
+
+            FILE TO READ:
+            - /tmp/diff.txt (code diff — this is the ONLY source of truth)
+
+            INSTRUCTIONS:
+            - Read the file with `cat /tmp/diff.txt`
+            - Do NOT run grep, sed, head, tail, or any other exploration commands
+            - Immediately write /tmp/summary.txt after reading
+
+            RULES:
+            - ONLY describe changes that are visible in the diff. Do NOT infer, guess, or add anything not shown in the diff.
+            - If the diff is empty, write: "No application code changes in this PR."
+
+            OUTPUT: Write 2–4 sentences in plain text (no Markdown). Describe what changed and why it matters, in language a project manager can understand (no technical jargon).
+            Do NOTHING else. No API calls, no grep, no file exploration. Just read → write.
+
+      - name: Post Jira comment
+        env:
+          JIRA_URL: ${{ secrets.JIRA_URL }}
+          JIRA_USERNAME: ${{ secrets.JIRA_USERNAME }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          TICKET="${{ github.event.pull_request.head.ref }}"
+          PR_NUM="${{ github.event.pull_request.number }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          REPO="${{ github.repository }}"
+
+          if [ -f /tmp/summary.txt ]; then
+            SUMMARY=$(cat /tmp/summary.txt)
+          else
+            SUMMARY="No summary available."
+          fi
+
+          {
+            echo "🚀 PR #${PR_NUM} merged: ${PR_TITLE}"
+            echo ""
+            echo "${SUMMARY}"
+            echo ""
+            echo "See: https://github.com/${REPO}/pull/${PR_NUM}"
+          } > /tmp/jira_comment.txt
+
+          jq -n --rawfile text /tmp/jira_comment.txt \
+            '{"body":{"type":"doc","version":1,"content":[{"type":"paragraph","content":[{"type":"text","text":$text}]}]}}' | \
+            curl -s -u "$JIRA_USERNAME:$JIRA_API_TOKEN" -X POST \
+              -H "Content-Type: application/json" \
+              -d @- \
+              "$JIRA_URL/rest/api/3/issue/$TICKET/comment"
+
+      - name: Transition to Done
+        env:
+          JIRA_URL: ${{ secrets.JIRA_URL }}
+          JIRA_USERNAME: ${{ secrets.JIRA_USERNAME }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        shell: bash
+        run: |
+          TICKET="${{ github.event.pull_request.head.ref }}"
+
+          # Find the "Done" transition ID
+          DONE_ID=$(curl -s -u "$JIRA_USERNAME:$JIRA_API_TOKEN" \
+            "$JIRA_URL/rest/api/2/issue/$TICKET/transitions" \
+            | jq -r '.transitions[] | select(.name=="Done" or .to.name=="Done") | .id' | head -1)
+
+          if [ -n "$DONE_ID" ] && [ "$DONE_ID" != "null" ]; then
+            curl -s -u "$JIRA_USERNAME:$JIRA_API_TOKEN" -X POST \
+              -H "Content-Type: application/json" \
+              -d "{\"transition\":{\"id\":\"$DONE_ID\"}}" \
+              "$JIRA_URL/rest/api/2/issue/$TICKET/transitions"
+            echo "Transitioned $TICKET to Done (transition ID: $DONE_ID)"
+          else
+            echo "Warning: Could not find 'Done' transition for $TICKET"
+          fi

@@ -2,6 +2,9 @@ import pytest
 import os
 import tempfile
 import io
+import calendar
+from datetime import datetime, timedelta
+from unittest.mock import patch
 from app import app, init_db, get_db, DATABASE
 
 
@@ -35,6 +38,7 @@ def seeded_client(client):
         "Gas,40.00,2026-01-18,Transport\n"
         "Internet,60.00,2026-01-05,Utilities\n"
     )
+    pass
     data = {"file": (io.BytesIO(csv_content.encode("utf-8")), "expenses.csv")}
     client.post("/api/expenses/upload", data=data, content_type="multipart/form-data")
     return client
@@ -67,7 +71,7 @@ class TestGetExpenses:
         """Each expense has the expected fields."""
         resp = seeded_client.get("/api/expenses")
         expense = resp.get_json()[0]
-        assert set(expense.keys()) == {"id", "description", "amount", "date", "category"}
+        assert set(expense.keys()) == {"id", "description", "amount", "date", "category", "excluded"}
 
     def test_expense_data_types(self, seeded_client):
         """Field values have the correct types."""
@@ -154,6 +158,36 @@ class TestUploadCSV:
         expenses = client.get("/api/expenses").get_json()
         assert len(expenses) == 3
 
+    def test_duplicate_csv_upload(self, client):
+        """Uploading the same CSV twice doubles the data and summary totals."""
+        csv_content = (
+            "description,amount,date,category\n"
+            "Coffee,4.50,2026-01-10,Food\n"
+            "Bus ticket,2.00,2026-01-11,Transport\n"
+        )
+
+        # First upload
+        data = {"file": (io.BytesIO(csv_content.encode("utf-8")), "dup.csv")}
+        resp = client.post("/api/expenses/upload", data=data, content_type="multipart/form-data")
+        assert resp.status_code == 200
+        assert "2 expenses" in resp.get_json()["message"]
+
+        # Second identical upload
+        data = {"file": (io.BytesIO(csv_content.encode("utf-8")), "dup.csv")}
+        resp = client.post("/api/expenses/upload", data=data, content_type="multipart/form-data")
+        assert resp.status_code == 200
+        assert "2 expenses" in resp.get_json()["message"]
+
+        # All 4 rows should be present
+        expenses = client.get("/api/expenses").get_json()
+        assert len(expenses) == 4
+
+        # Summary totals should reflect both uploads
+        summary = client.get("/api/expenses/summary").get_json()
+        totals = {row["category"]: row["total"] for row in summary}
+        assert totals["Food"] == pytest.approx(9.00)       # 4.50 * 2
+        assert totals["Transport"] == pytest.approx(4.00)   # 2.00 * 2
+
     def test_malformed_csv_returns_500(self, client):
         """A CSV with non-numeric amount triggers a 500 error."""
         csv_content = "description,amount,date,category\nBad,not_a_number,2026-01-01,Misc\n"
@@ -177,6 +211,33 @@ class TestUploadCSV:
         resp = client.post("/api/expenses/upload", data=data, content_type="multipart/form-data")
         assert resp.status_code == 200
         assert "1 expenses" in resp.get_json()["message"]
+
+    def test_special_characters_in_fields(self, client):
+        """CSV with quoted fields containing commas and special characters imports correctly."""
+        csv_content = (
+            'description,amount,date,category\n'
+            '"Lunch, dinner & drinks",55.00,2026-04-10,"Food & Drink"\n'
+            '"Hotel ""Grand Palace""",200.00,2026-04-11,Travel\n'
+        )
+        data = {"file": (io.BytesIO(csv_content.encode("utf-8")), "special.csv")}
+        resp = client.post("/api/expenses/upload", data=data, content_type="multipart/form-data")
+        assert resp.status_code == 200
+        assert "2 expenses" in resp.get_json()["message"]
+
+        expenses = client.get("/api/expenses").get_json()
+        assert len(expenses) == 2
+
+        descs = {e["description"] for e in expenses}
+        assert "Lunch, dinner & drinks" in descs
+        assert 'Hotel "Grand Palace"' in descs
+
+        cats = {e["category"] for e in expenses}
+        assert "Food & Drink" in cats
+        assert "Travel" in cats
+
+        amounts = {e["description"]: e["amount"] for e in expenses}
+        assert amounts["Lunch, dinner & drinks"] == pytest.approx(55.00)
+        assert amounts['Hotel "Grand Palace"'] == pytest.approx(200.00)
 
 
 # ─── GET /api/expenses/summary ────────────────────────────────────────────────
@@ -242,3 +303,162 @@ class TestGetSummary:
         assert len(summary) == 1
         assert summary[0]["category"] == "OnlyCat"
         assert summary[0]["total"] == pytest.approx(30.00)
+
+
+# ─── GET /api/expenses/timeseries ─────────────────────────────────────────────
+
+class TestGetTimeSeries:
+    def _upload(self, client, rows):
+        header = "description,amount,date,category\n"
+        body = "".join(f"{r[0]},{r[1]},{r[2]},{r[3]}\n" for r in rows)
+        data = {"file": (io.BytesIO((header + body).encode("utf-8")), "ts.csv")}
+        client.post("/api/expenses/upload", data=data, content_type="multipart/form-data")
+
+    def test_empty_timeseries(self, client):
+        """Timeseries with no data returns gap-filled zeros for the full period."""
+        resp = client.get("/api/expenses/timeseries?period=month")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        now = datetime.now()
+        days_in_month = calendar.monthrange(now.year, now.month)[1]
+        assert len(data) == days_in_month
+        assert all(row["total"] == 0 for row in data)
+
+    def test_invalid_period(self, client):
+        """Invalid period returns 400."""
+        resp = client.get("/api/expenses/timeseries?period=decade")
+        assert resp.status_code == 400
+        assert "Invalid period" in resp.get_json()["error"]
+
+    def test_month_period(self, client):
+        """Month period returns all days in current month with gap-filled zeros."""
+        now = datetime.now()
+        date1 = f"{now.year}-{now.month:02d}-05"
+        date2 = f"{now.year}-{now.month:02d}-05"
+        date3 = f"{now.year}-{now.month:02d}-10"
+        self._upload(client, [
+            ("A", "10.00", date1, "Food"),
+            ("B", "20.00", date2, "Food"),
+            ("C", "30.00", date3, "Transport"),
+        ])
+        resp = client.get("/api/expenses/timeseries?period=month")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        days_in_month = calendar.monthrange(now.year, now.month)[1]
+        assert len(data) == days_in_month
+        totals = {row["date"]: row["total"] for row in data}
+        assert totals[date1] == pytest.approx(30.00)
+        assert totals[date3] == pytest.approx(30.00)
+        # All other days should be zero-filled
+        zero_days = [row for row in data if row["date"] not in (date1, date3)]
+        assert all(row["total"] == 0 for row in zero_days)
+
+    def test_week_period(self, client):
+        """Week period returns all 7 days with gap-filled zeros."""
+        now = datetime.now()
+        start_of_week = now - timedelta(days=now.weekday())
+        in_week = start_of_week.strftime("%Y-%m-%d")
+        out_of_week = (start_of_week - timedelta(days=7)).strftime("%Y-%m-%d")
+        self._upload(client, [
+            ("A", "10.00", in_week, "Food"),
+            ("B", "50.00", out_of_week, "Food"),
+        ])
+        resp = client.get("/api/expenses/timeseries?period=week")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert len(data) == 7
+        totals = {row["date"]: row["total"] for row in data}
+        assert totals[in_week] == pytest.approx(10.00)
+        # Out-of-week expense should not appear; remaining days are zero
+        assert out_of_week not in totals
+        zero_days = [row for row in data if row["date"] != in_week]
+        assert all(row["total"] == 0 for row in zero_days)
+
+    def test_year_period_groups_by_month(self, client):
+        """Year period returns all 12 months with gap-filled zeros."""
+        now = datetime.now()
+        self._upload(client, [
+            ("A", "10.00", f"{now.year}-01-15", "Food"),
+            ("B", "20.00", f"{now.year}-01-20", "Food"),
+            ("C", "30.00", f"{now.year}-03-10", "Transport"),
+        ])
+        resp = client.get("/api/expenses/timeseries?period=year")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert len(data) == 12
+        totals = {row["date"]: row["total"] for row in data}
+        assert totals[f"{now.year}-01"] == pytest.approx(30.00)
+        assert totals[f"{now.year}-03"] == pytest.approx(30.00)
+        # Months without data should be zero
+        zero_months = [row for row in data if row["date"] not in (f"{now.year}-01", f"{now.year}-03")]
+        assert all(row["total"] == 0 for row in zero_months)
+
+    def test_default_period_is_month(self, client):
+        """Default period is month when not specified, returns full month gap-filled."""
+        now = datetime.now()
+        date1 = f"{now.year}-{now.month:02d}-01"
+        self._upload(client, [("A", "10.00", date1, "Food")])
+        resp = client.get("/api/expenses/timeseries")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        days_in_month = calendar.monthrange(now.year, now.month)[1]
+        assert len(data) == days_in_month
+        totals = {row["date"]: row["total"] for row in data}
+        assert totals[date1] == pytest.approx(10.00)
+
+    def test_timeseries_ordered_by_date_asc(self, client):
+        """Results are ordered by date ascending."""
+        now = datetime.now()
+        self._upload(client, [
+            ("A", "10.00", f"{now.year}-{now.month:02d}-15", "Food"),
+            ("B", "20.00", f"{now.year}-{now.month:02d}-05", "Food"),
+            ("C", "30.00", f"{now.year}-{now.month:02d}-10", "Food"),
+        ])
+        resp = client.get("/api/expenses/timeseries?period=month")
+        data = resp.get_json()
+        dates = [row["date"] for row in data]
+        assert dates == sorted(dates)
+
+
+# ─── GET /api/expenses/periods ────────────────────────────────────────────────
+
+class TestGetPeriods:
+    def _upload(self, client, rows):
+        header = "description,amount,date,category\n"
+        body = "".join(f"{r[0]},{r[1]},{r[2]},{r[3]}\n" for r in rows)
+        data = {"file": (io.BytesIO((header + body).encode("utf-8")), "p.csv")}
+        client.post("/api/expenses/upload", data=data, content_type="multipart/form-data")
+
+    def test_all_false_when_empty(self, client):
+        """All periods are false when no data exists."""
+        resp = client.get("/api/expenses/periods")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data == {"week": False, "month": False, "year": False}
+
+    def test_month_available(self, client):
+        """Month is true when data exists in the current month."""
+        now = datetime.now()
+        date = f"{now.year}-{now.month:02d}-10"
+        self._upload(client, [("A", "10.00", date, "Food")])
+        resp = client.get("/api/expenses/periods")
+        data = resp.get_json()
+        assert data["month"] is True
+        assert data["year"] is True
+
+    def test_week_available(self, client):
+        """Week is true when data exists in the current week."""
+        now = datetime.now()
+        start_of_week = now - timedelta(days=now.weekday())
+        date = start_of_week.strftime("%Y-%m-%d")
+        self._upload(client, [("A", "10.00", date, "Food")])
+        resp = client.get("/api/expenses/periods")
+        data = resp.get_json()
+        assert data["week"] is True
+
+    def test_old_data_not_in_current_periods(self, client):
+        """Data from a past year doesn't show in current periods."""
+        self._upload(client, [("A", "10.00", "2020-06-15", "Food")])
+        resp = client.get("/api/expenses/periods")
+        data = resp.get_json()
+        assert data == {"week": False, "month": False, "year": False}
