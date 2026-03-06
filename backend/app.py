@@ -14,15 +14,30 @@ CORS(app)
 DATABASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'expenses.db')
 
 def get_db():
+    """
+    Connects to the SQLite database and sets up the row factory for enhanced
+    dictionary-like access to query results.
+
+    :return: A connection object configured with a row factory for dictionary-like access
+    :rtype: sqlite3.Connection
+    """
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
 
 def normalize_date(date_str):
-    """Normalize a date string to YYYY-MM-DD format.
+    """
+    Normalize a date string into the standard format `YYYY-MM-DD`. If the input date
+    string is already in the desired format, it will be returned unmodified. The function
+    attempts to parse and convert date strings provided in formats such as `MM/DD/YYYY`
+    or `MM-DD-YYYY` using `/` or `-` as separators. If the date string does not match
+    any known formats, it is returned as-is.
 
-    Supports common formats such as M/D/YYYY, MM/DD/YYYY, M-D-YYYY,
-    MM-DD-YYYY, and already-normalized YYYY-MM-DD.
+    :param date_str: The input date string to normalize.
+    :type date_str: str
+    :return: The normalized date string in the format `YYYY-MM-DD`, or the original
+        string if no known formats matched.
+    :rtype: str
     """
     date_str = date_str.strip()
     # Already in YYYY-MM-DD format
@@ -39,6 +54,24 @@ def normalize_date(date_str):
 
 
 def init_db():
+    """
+    Initializes the database by creating the `expenses` table if it does not already exist.
+    This function also includes a migration step to ensure the `excluded` column is present
+    in existing databases.
+
+    The `expenses` table consists of the following fields:
+    - id: An INTEGER primary key that auto-increments.
+    - description: A TEXT field for storing the description of the expense.
+    - amount: A REAL field for the expense amount.
+    - date: A TEXT field for the date of the expense.
+    - category: A TEXT field for categorizing the expense.
+    - excluded: An INTEGER field used as a flag, defaulting to 0.
+
+    If the `excluded` column is missing in existing databases, the function adds it
+    after checking the table schema via PRAGMA table_info.
+
+    :return: None
+    """
     conn = get_db()
     conn.execute('''
         CREATE TABLE IF NOT EXISTS expenses (
@@ -50,11 +83,10 @@ def init_db():
             excluded INTEGER NOT NULL DEFAULT 0
         )
     ''')
-    # Migration: add excluded column to existing databases
-    try:
+    # Migration: add excluded column to existing databases if missing
+    existing_columns = {row['name'] for row in conn.execute('PRAGMA table_info(expenses)').fetchall()}
+    if 'excluded' not in existing_columns:
         conn.execute('ALTER TABLE expenses ADD COLUMN excluded INTEGER NOT NULL DEFAULT 0')
-    except Exception:
-        pass  # Column already exists
     conn.commit()
     conn.close()
 
@@ -238,20 +270,16 @@ def get_timeseries():
 @app.route('/api/expenses/periods', methods=['GET'])
 def get_available_periods():
     """
-    Fetches the available expense periods which contain at least one expense record.
+    Retrieves the availability of expense data for specified time periods. The endpoint
+    calculates whether any expenses exist for the current or offset week, month, or year
+    based on query parameters. The result is returned as a JSON object indicating the
+    availability of expense data for each period.
 
-    The endpoint checks for the specified time periods (week, month, year) and determines
-    whether there are any recorded expenses for each period. It uses an optional 'offset'
-    parameter to adjust the range of the queried periods.
+    :raises ValueError: If the value of the offset query parameter cannot be cast to an integer.
+    :raises TypeError: If the offset query parameter is not provided or is invalid.
 
-    :param offset: Integer offset for adjusting the queried periods; defaults to 0.
-    :type offset: int
-
-    :raises ValueError: If an invalid value is provided for the 'offset' parameter.
-    :raises TypeError: If an incompatible type is provided for the 'offset' parameter.
-
-    :return: A JSON object indicating whether there are recorded expenses for each period
-             (week, month, year). Each period will map to a boolean value.
+    :return: A JSON object with available periods as keys (`week`, `month`, `year`) and
+        boolean values indicating whether data exists for each period.
     :rtype: flask.Response
     """
     try:
