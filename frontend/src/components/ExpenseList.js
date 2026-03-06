@@ -27,6 +27,27 @@ const buildCategoryColorMap = (summary) => {
   return colorMap;
 };
 
+const HighlightText = ({ text, highlight }) => {
+  if (!highlight || !highlight.trim()) return <>{text}</>;
+
+  const regex = new RegExp(`(${highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  const parts = text.split(regex);
+
+  return (
+    <>
+      {parts.map((part, i) =>
+        regex.test(part) ? (
+          <mark key={i} className="bg-amber-200 dark:bg-amber-500/30 text-inherit rounded px-0.5">
+            {part}
+          </mark>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  );
+};
+
 const ExpenseList = ({ expenses, isLoading, summary, onDeleteExpense, onToggleExcluded }) => {
   const [selectedCategories, setSelectedCategories] = useState(new Set());
   const [sortField, setSortField] = useState('date');
@@ -35,8 +56,10 @@ const ExpenseList = ({ expenses, isLoading, summary, onDeleteExpense, onToggleEx
   const [openMenuId, setOpenMenuId] = useState(null);
   const [expensePendingDelete, setExpensePendingDelete] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
   const dropdownRef = useRef(null);
   const actionMenuRef = useRef(null);
+  const searchInputRef = useRef(null);
 
   const categoryColorMap = useMemo(() => buildCategoryColorMap(summary), [summary]);
 
@@ -53,6 +76,12 @@ const ExpenseList = ({ expenses, isLoading, summary, onDeleteExpense, onToggleEx
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (searchOpen && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [searchOpen]);
 
   const categories = useMemo(() => {
     if (!expenses || expenses.length === 0) return [];
@@ -146,7 +175,39 @@ const ExpenseList = ({ expenses, isLoading, summary, onDeleteExpense, onToggleEx
   return (
     <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 transition-colors">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Expenses</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Expenses</h2>
+
+          {/* Search Bar */}
+          <div className="flex items-center">
+            <button
+              onClick={() => {
+                setSearchOpen((prev) => !prev);
+                if (searchOpen) setSearchTerm('');
+              }}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              aria-label="Search expenses"
+            >
+              {/* Magnifying glass icon */}
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </button>
+
+            {searchOpen && (
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search descriptions..."
+                className="animate-expand-search ml-2 text-sm rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 overflow-hidden"
+              />
+            )}
+          </div>
+        </div>
+
         <span className="text-sm text-slate-500 dark:text-slate-400">
           {displayedExpenses.length} of {expenses.length} items
           {isFilterActive && (
@@ -251,9 +312,11 @@ const ExpenseList = ({ expenses, isLoading, summary, onDeleteExpense, onToggleEx
           </thead>
           <tbody>
             {displayedExpenses.map((expense) => (
-              <tr key={expense.id} className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${expense.excluded ? 'opacity-50' : ''}`}>
+              <tr key={expense.id} className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${expense.excluded ? 'opacity-50' : ''} ${searchTerm.trim() ? 'animate-fade-in' : ''}`}>
                 <td className="py-3 px-2">
-                  <span className={`text-slate-800 dark:text-slate-100 font-medium ${expense.excluded ? 'line-through' : ''}`}>{expense.description}</span>
+                  <span className={`text-slate-800 dark:text-slate-100 font-medium ${expense.excluded ? 'line-through' : ''}`}>
+                    <HighlightText text={expense.description} highlight={searchTerm} />
+                  </span>
                 </td>
                 <td className="py-3 px-2">
                   <span
