@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { uploadCSV } from '../services/expenseApi';
 
 const FileUpload = ({ onUploadSuccess }) => {
@@ -6,6 +6,22 @@ const FileUpload = ({ onUploadSuccess }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState(null);
   const fileInputRef = useRef(null);
+  const [isFadingOut, setIsFadingOut] = useState(false);
+
+  useEffect(() => {
+    if (uploadStatus?.type === 'success') {
+      setIsFadingOut(false);
+      const fadeTimer = setTimeout(() => {
+        setIsFadingOut(true);
+        const removeTimer = setTimeout(() => {
+          setUploadStatus(null);
+          setIsFadingOut(false);
+        }, 500);
+        return () => clearTimeout(removeTimer);
+      }, 5000);
+      return () => clearTimeout(fadeTimer);
+    }
+  }, [uploadStatus]);
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -41,6 +57,7 @@ const FileUpload = ({ onUploadSuccess }) => {
 
     setIsUploading(true);
     setUploadStatus(null);
+    setIsFadingOut(false);
 
     try {
       const result = await uploadCSV(file);
@@ -133,13 +150,31 @@ const FileUpload = ({ onUploadSuccess }) => {
 
       {uploadStatus && (
         <div className={`
-          mt-4 p-3 rounded-lg text-sm
+          mt-4 p-3 rounded-lg text-sm flex items-center justify-between
+          transition-all duration-500 ease-in-out
+          ${isFadingOut ? 'opacity-0 max-h-0 mt-0 p-0 overflow-hidden' : 'opacity-100 max-h-20'}
           ${uploadStatus.type === 'success' 
             ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900' 
             : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-900'
           }
         `}>
-          {uploadStatus.message}
+          <span>{uploadStatus.message}</span>
+          <button
+            onClick={() => {
+              setUploadStatus(null);
+              setIsFadingOut(false);
+            }}
+            className={`ml-2 flex-shrink-0 p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${
+              uploadStatus.type === 'success'
+                ? 'text-emerald-500 dark:text-emerald-400'
+                : 'text-red-500 dark:text-red-400'
+            }`}
+            aria-label="Dismiss message"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       )}
     </div>
