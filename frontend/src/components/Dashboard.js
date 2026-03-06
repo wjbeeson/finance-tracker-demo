@@ -108,6 +108,13 @@ const Dashboard = () => {
     setPeriodOffset(0);
   };
 
+  const activeExpenses = expenses.filter(e => !e.excluded);
+  const totalSpending = activeExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const averageExpense = activeExpenses.length > 0 ? totalSpending / activeExpenses.length : 0;
+
+  const formatCurrency = (value) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors" style={{ minWidth: '768px' }}>
       {/* Header */}
@@ -190,6 +197,18 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-slate-600 dark:text-slate-300">Categories</span>
                   <span className="text-2xl font-bold text-slate-800 dark:text-slate-100">{summary.length}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600 dark:text-slate-300">Total Spending</span>
+                  <span className="text-2xl font-bold text-slate-800 dark:text-slate-100">
+                    {formatCurrency(totalSpending)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600 dark:text-slate-300">Average Expense</span>
+                  <span className="text-2xl font-bold text-slate-800 dark:text-slate-100">
+                    {formatCurrency(averageExpense)}
+                  </span>
                 </div>
               </div>
             </div>
