@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { getAllExpenses, getExpenseSummary, getExpenseTimeSeries, getPeriodLabel, deleteExpense, toggleExpenseExcluded } from '../services/expenseApi';
 import { useTheme } from '../context/ThemeContext';
 import FileUpload from './FileUpload';
-import DonutChart from './DonutChart';
+import DonutChart, { COLORS } from './DonutChart';
 import TimeSeriesChart from './TimeSeriesChart';
 import ExpenseList from './ExpenseList';
 
@@ -157,7 +157,28 @@ const Dashboard = () => {
           {/* Left Column - Upload & Chart */}
           <div className="lg:col-span-1 space-y-6">
             <FileUpload onUploadSuccess={handleUploadSuccess} />
-            
+
+            {/* Top Spending Category */}
+            {!isLoading && summary.length > 0 && (
+              <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 transition-colors">
+                <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Top Category</h2>
+                <div className="flex items-center gap-3">
+                  <span
+                    className="w-4 h-4 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: COLORS[0] }}
+                  />
+                  <div className="min-w-0">
+                    <p className="text-lg font-bold text-slate-800 dark:text-slate-100 truncate">
+                      {summary[0].category}
+                    </p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(summary[0].total)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Quick Stats */}
             <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6 transition-colors">
               <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">Quick Stats</h2>
